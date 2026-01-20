@@ -10,7 +10,6 @@ public class HumanClient extends AbstractClient {
 
     /**
      * Creates a new Player object.
-     *
      * @param name the name of the player.
      */
     public HumanClient(String name) {
@@ -24,6 +23,12 @@ public class HumanClient extends AbstractClient {
      * @param game the current game.
      * @return the correctly formed Move parameter.
      */
+
+    /*@
+    requires game != null;
+    ensures \result != null;
+    @*/
+
     @Override
     public Move determineMove(Game game) {
         while (true) {

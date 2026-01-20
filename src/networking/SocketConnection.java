@@ -52,7 +52,7 @@ public abstract class SocketConnection {
      * Start receiving messages and call methods of the given handler to handle the messages.
      * This method may only be called once.
      */
-    protected void start() {
+    public void start() {
         if (started) {
             throw new IllegalStateException("Cannot start a SocketConnection twice");
         }
@@ -131,5 +131,5 @@ public abstract class SocketConnection {
     /**
      * Handles a disconnect from the connection, i.e., when the connection is closed.
      */
-    protected abstract void handleDisconnect();
+    public abstract void handleDisconnect();
 }

@@ -15,13 +15,12 @@ public class ServerConnection extends SocketConnection {
     private PrintWriter out;
     private SocketConnection connection;
     /**
-     * Constructor for the Server Connection
+     * Constructor for the Server Connection.
      * @param socket socket through wich everything will be connected
      * @throws IOException
      */
     protected ServerConnection(Socket socket) throws IOException {
         super(socket);
-
     }
 
     /**

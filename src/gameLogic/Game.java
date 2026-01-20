@@ -168,4 +168,14 @@ public class Game {
     private void switchPlayer() {
         currentPlayer = (currentPlayer == 1) ? 2 : 1;
     }
+
+    /**
+     * Getter for the current piece id.
+     * @return the current piece id.
+     */
+
+    public int getCurrentPieceID() {
+        return currentPieceID;
+    }
+
 }

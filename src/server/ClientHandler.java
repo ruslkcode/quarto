@@ -17,8 +17,8 @@ public class ClientHandler extends SocketConnection {
     private int playerID;
 
     protected ClientHandler(Socket socket, GameServer server) throws IOException {
-        this.server = server;
         super(socket);
+        this.server = server;
     }
 
 

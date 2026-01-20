@@ -13,10 +13,9 @@ import java.util.Map;
 import java.util.logging.Handler;
 
 public class GameServer extends SocketServer {
-    private Map<String, Game> activeplayers;
+    private ArrayList<ClientHandler> clients = new ArrayList<>();
     private ArrayList<ClientHandler> waitingplayers = new ArrayList<>();
     private Map<ClientHandler, Game> activeGames = new HashMap<>();
-    private ArrayList<ClientHandler> clients;
     private ClientHandler clientHandler;
 
 
@@ -89,7 +88,7 @@ public class GameServer extends SocketServer {
     }
 
     public synchronized void addToQueue(ClientHandler player){
-        if (activeplayers.containsKey(player) || waitingplayers.contains(player)){
+        if (activeGames.containsKey(player) || waitingplayers.contains(player)){
             player.sendPacket(Protocol.ERROR + Protocol.SEPARATOR + "Already in game or queue");
             return;
         }
@@ -125,7 +124,7 @@ public class GameServer extends SocketServer {
     }
 
     public boolean inGame(ClientHandler username){
-        if (activeplayers.containsKey(username)){
+        if (activeGames.containsKey(username)){
             return true;
         }
         else return false;

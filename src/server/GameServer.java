@@ -10,6 +10,7 @@ import java.net.Socket;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Scanner;
 import java.util.logging.Handler;
 
 public class GameServer extends SocketServer {
@@ -94,7 +95,6 @@ public class GameServer extends SocketServer {
         }
         System.out.println(player + " is added to queue");
         waitingplayers.add(player);
-        player.sendPacket(Protocol.QUEUE + Protocol.SEPARATOR + "WAITING");
 
         checkQueue();
     }
@@ -106,8 +106,7 @@ public class GameServer extends SocketServer {
             ClientHandler p2 = waitingplayers.remove(0);
             p1.setPlayerID(0);
             p2.setPlayerID(1);
-            int startingPlayerID = new java.util.Random().nextInt(2);
-            Game game = new Game(startingPlayerID);
+            Game game = new Game(0);
 
             activeGames.put(p1, game);
             activeGames.put(p2, game);
@@ -122,6 +121,25 @@ public class GameServer extends SocketServer {
 
         }
     }
+    public synchronized String getUserList() {
+        StringBuilder sb = new StringBuilder();
+        for (ClientHandler client : clients) {
+            if (client.getUsername() != null) {
+                sb.append(client.getUsername()).append(Protocol.SEPARATOR);
+            }
+        }
+        if (sb.length() > 0) {
+            sb.setLength(sb.length() - 1);
+        }
+        return sb.toString();
+    }
+
+
+    public synchronized void broadcast(String message) {
+        for (ClientHandler client : clients) {
+            client.sendPacket(message);
+        }
+    }
 
     public boolean inGame(ClientHandler username){
         if (activeGames.containsKey(username)){
@@ -131,7 +149,7 @@ public class GameServer extends SocketServer {
     }
     public synchronized void handleDisconnect(ClientHandler player) {
         if (waitingplayers.remove(player)) {
-            System.out.println(player.getUsername() + " удален из очереди.");
+            System.out.println(player.getUsername() + " deleted from queue");
             return;
         }
 
@@ -154,4 +172,16 @@ public class GameServer extends SocketServer {
     public void close(){
         super.close();
     }
+
+    public static void main(String[] args) throws IOException {
+        Scanner input = new Scanner(System.in);
+        System.out.println("Enter the port number: ");
+        String s = input.nextLine();
+        int port = Integer.parseInt(s);
+        GameServer server = new GameServer(port);
+        System.out.println("Server is on prot: " + port + "...");
+        server.acceptConnections();
+        System.out.println("Server is stopped.");
+    }
+
 }

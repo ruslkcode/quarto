@@ -72,13 +72,11 @@ public class ClientHandler extends SocketConnection {
                     }
                     break;
                 case Protocol.QUEUE:
-                    if (this.username == null){
+                    if (this.username == null) {
                         sendPacket(Protocol.ERROR + Protocol.SEPARATOR + "YOU HAVE TO LOGIN");
                         return;
                     }
-                    if (server.isLoggedIn(this.username)){
-                        server.addToQueue(this);
-                    }
+                    server.addToQueue(this);
                     break;
                 case Protocol.MOVE:
                     if (parts.length < 3) {
@@ -90,10 +88,21 @@ public class ClientHandler extends SocketConnection {
                     int location = Integer.parseInt(parts[2]);
 
                     server.handleMove(this, nextpPiece, location);
+                case Protocol.LIST:
+                    String users = server.getUserList();
+                    sendPacket(Protocol.LIST + Protocol.SEPARATOR + users);
+                    break;
+
+                case Protocol.CHAT:
+                    if (parts.length > 1) {
+                        String text = parts[1];
+                        server.broadcast(Protocol.CHAT + Protocol.SEPARATOR + this.username + Protocol.SEPARATOR + text);
+                    }
+                    break;
 
             }
         } catch (Exception e) {
-
+            e.printStackTrace();
         }
     }
 

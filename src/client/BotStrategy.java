@@ -2,6 +2,7 @@ package client;
 
 import gameLogic.Game;
 import gameLogic.Move;
+import java.util.List;
 
 /**
  * An interface for different implementations of strategies.

@@ -28,7 +28,6 @@ public class Game {
      * Constructs a new Quarto game.
      * Initializes an empty board, sets the starting player,
      * and creates all available pieces.
-     *
      * @param currentPlayer the player who starts the game (1 or 2)
      */
     /*@
@@ -152,7 +151,6 @@ public class Game {
     /**
      * Checks whether the game is over.
      * The game is over if there is a winner or the board is full.
-     *
      * @return true if the game is over, false otherwise
      */
     /*@
@@ -201,5 +199,19 @@ public class Game {
      */
     public Board getBoard() {
         return board;
+    }
+
+    /**
+     * Creates a deep copy of this game.
+     * @return a copy of the game
+     */
+    public Game deepCopy() {
+        Game copy = new Game(this.currentPlayer);
+        copy.board = this.board.deepCopy();
+        copy.currentPlayer = this.currentPlayer;
+        copy.currentPieceID = this.currentPieceID;
+        copy.allPieces = new HashMap<>(this.allPieces);
+        copy.availablePieces = new HashMap<>(this.availablePieces);
+        return copy;
     }
 }

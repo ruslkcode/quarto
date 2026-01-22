@@ -81,7 +81,6 @@ public class Game {
 
     /**
      * Returns the winner of the game.
-     *
      * @return the id of the winning player, or 0 if there is no winner
      */
     /*@
@@ -213,5 +212,13 @@ public class Game {
         copy.allPieces = new HashMap<>(this.allPieces);
         copy.availablePieces = new HashMap<>(this.availablePieces);
         return copy;
+    }
+
+    /**
+     *Method that checks if the result of the game is draw.
+     * @return true if it is draw, false if not.
+     */
+    public boolean isDraw() {
+        return isGameOver() && getWinner() == 0;
     }
 }

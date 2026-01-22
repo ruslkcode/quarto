@@ -32,6 +32,10 @@ public class ClientHandler extends SocketConnection {
         this.playerID = playerID;
     }
 
+    public int getPlayerID(){
+        return playerID;
+    }
+
     @Override
     protected void handlePackets(String message) throws NumberFormatException {
         if (StringUtils.isAllBlank(message)){

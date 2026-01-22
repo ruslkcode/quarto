@@ -7,6 +7,8 @@ import protocol.Protocol;
 public class GameSession {
     private final ClientHandler player1;
     private final ClientHandler player2;
+    private int player1ID;
+    private int player2ID;
     private final Game gameLogic;
     private final int gameId;
 
@@ -18,10 +20,13 @@ public class GameSession {
     }
 
     public void startGame() {
-        player1.setPlayerID(0);
-        player2.setPlayerID(1);
+        player1.setPlayerID(1);
+        player2.setPlayerID(2);
         player1.setOpponent(player2);
         player2.setOpponent(player1);
+        this.player1ID = player1.getPlayerID();
+        this.player2ID = player2.getPlayerID();
+
 
         String startPacket = Protocol.NEWGAME + Protocol.SEPARATOR + player1.getUsername() + Protocol.SEPARATOR + player2.getUsername();
 
@@ -43,7 +48,7 @@ public class GameSession {
             return;
         }
 
-        boolean isPieceValid;
+        boolean isPieceValid = false;
 
         if (gameLogic.isValidMove(move)) {
             System.out.println("[SESSION " + gameId + "] Move by " + player.getUsername() + ": Loc=" + location + ", Piece=" + nextPiece);
@@ -54,14 +59,25 @@ public class GameSession {
             if (location == -1) {
                 isPieceValid = (nextPiece >= 0 && nextPiece <= 15);
                 msg = Protocol.MOVE + Protocol.SEPARATOR + nextPiece;
-            } else {
+            } else if (gameLogic.isDraw() == false){
                 isPieceValid = (nextPiece >= 0 && nextPiece <= 17);
                 msg = Protocol.MOVE + Protocol.SEPARATOR + location + Protocol.SEPARATOR + nextPiece;
+            }
+            else if(gameLogic.getWinner() == 1){
+                msg = Protocol.GAMEOVER + Protocol.SEPARATOR + Protocol.VICTORY + player1;
+            }
+            else if(gameLogic.getWinner() == 2){
+                msg = Protocol.GAMEOVER + Protocol.SEPARATOR + Protocol.VICTORY + player2;
+            }
+            else {
+                msg = Protocol.DRAW + Protocol.SEPARATOR  + player1 + Protocol.SEPARATOR + player2;
+
             }
             if (!isPieceValid) {
                 player.sendPacket(Protocol.ERROR + Protocol.SEPARATOR + "Illegal piece ID: " + nextPiece);
                 return;
             }
+
             if (opponent != null) {
                 opponent.sendPacket(msg);
             }

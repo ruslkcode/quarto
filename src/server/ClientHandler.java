@@ -2,12 +2,9 @@ package server;
 
 import networking.SocketConnection;
 import protocol.Protocol;
-
 import java.io.IOException;
 import java.net.Socket;
-
 import org.apache.commons.lang3.StringUtils;
-
 
 public class ClientHandler extends SocketConnection {
 
@@ -21,7 +18,6 @@ public class ClientHandler extends SocketConnection {
         this.server = server;
     }
 
-
     public String getUsername() {
         return username;
     }
@@ -32,12 +28,8 @@ public class ClientHandler extends SocketConnection {
     public ClientHandler getOpponent() {
         return opponent;
     }
-
     public void setPlayerID(int playerID) {
         this.playerID = playerID;
-    }
-    public int getPlayerID() {
-        return playerID;
     }
 
     @Override
@@ -65,12 +57,12 @@ public class ClientHandler extends SocketConnection {
                                 sendPacket(Protocol.LOGIN + Protocol.SEPARATOR + "SUCCESS");
                                 System.out.println(username + " is logged in");
                             }
-                        }
-                        else {
+                        } else {
                             sendPacket(Protocol.ERROR + Protocol.SEPARATOR + "ERROR: EMPTY USERNAME");
                         }
                     }
                     break;
+
                 case Protocol.QUEUE:
                     if (this.username == null) {
                         sendPacket(Protocol.ERROR + Protocol.SEPARATOR + "YOU HAVE TO LOGIN");
@@ -78,16 +70,23 @@ public class ClientHandler extends SocketConnection {
                     }
                     server.addToQueue(this);
                     break;
+
                 case Protocol.MOVE:
-                    if (parts.length < 3) {
-                        sendPacket(Protocol.ERROR + Protocol.SEPARATOR + "Invalid Move Format");
-                        return;
+                    if (parts.length == 2) {
+                        int piece = Integer.parseInt(parts[1]);
+                        server.handleMove(this, piece, -1);
                     }
+                    else if (parts.length == 3) {
+                        int location = Integer.parseInt(parts[1]);
+                        int piece = Integer.parseInt(parts[2]);
 
-                    int nextpPiece = Integer.parseInt(parts[1]);
-                    int location = Integer.parseInt(parts[2]);
+                        server.handleMove(this, piece, location);
+                    }
+                    else {
+                        sendPacket(Protocol.ERROR + Protocol.SEPARATOR + "Invalid Move Format");
+                    }
+                    break;
 
-                    server.handleMove(this, nextpPiece, location);
                 case Protocol.LIST:
                     String users = server.getUserList();
                     sendPacket(Protocol.LIST + Protocol.SEPARATOR + users);
@@ -99,19 +98,15 @@ public class ClientHandler extends SocketConnection {
                         server.broadcast(Protocol.CHAT + Protocol.SEPARATOR + this.username + Protocol.SEPARATOR + text);
                     }
                     break;
-
             }
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    /**
-     * The method that handles disconnection.
-     */
     @Override
     public void handleDisconnect() {
-        System.out.println(Protocol.DISCONNECT + Protocol.SEPARATOR + this);
+        System.out.println(Protocol.DISCONNECT + Protocol.SEPARATOR + this.username);
         if (server != null) {
             server.handleDisconnect(this);
         }

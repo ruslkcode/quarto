@@ -1,7 +1,5 @@
 package server;
 
-import gameLogic.Game;
-import gameLogic.Move;
 import networking.SocketServer;
 import protocol.Protocol;
 
@@ -11,75 +9,39 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Scanner;
-import java.util.logging.Handler;
 
 public class GameServer extends SocketServer {
-    private ArrayList<ClientHandler> clients = new ArrayList<>();
-    private ArrayList<ClientHandler> waitingplayers = new ArrayList<>();
-    private Map<ClientHandler, Game> activeGames = new HashMap<>();
-    private ClientHandler clientHandler;
+    private final ArrayList<ClientHandler> clients = new ArrayList<>();
+    private final ArrayList<ClientHandler> waitingPlayers = new ArrayList<>();
 
+    private final Map<ClientHandler, GameSession> activeSessions = new HashMap<>();
 
-    /**
-     * Creates a new Server that listens for connections on the given port.
-     * Use port 0 to let the system pick a free port.
-     *
-     * @param port the port on which this server listens for connections
-     * @throws IOException if an I/O error occurs when opening the socket
-     */
+    private int nextGameId = 1;
+
     protected GameServer(int port) throws IOException {
         super(port);
     }
-    /**
-     * Creates a new connection handler for the given socket.
-     *
-     * @param socket the socket for the connection
-     */
-    /*@ requires socket != null; @*/
+
     @Override
     protected void handleConnection(Socket socket) throws IOException {
         ClientHandler clientHandler = new ClientHandler(socket, this);
+        synchronized (clients) {
+            clients.add(clientHandler);
+        }
         clientHandler.start();
     }
 
-    public void revcieveGame(Socket socket){
-
-    }
-
-    public void handleMove(ClientHandler player, int location, int nextPiece){
-        if (!activeGames.containsKey(player)) {
+    public void handleMove(ClientHandler player, int nextPiece, int location) {
+        if (!activeSessions.containsKey(player)) {
             player.sendPacket(Protocol.ERROR + Protocol.SEPARATOR + "Not in game");
             return;
         }
 
-        Game game = activeGames.get(player);
-
-        Move move;
-
-        if (location == -1){
-            move = new Move(nextPiece);
-        }
-        else {
-            move = new Move(nextPiece, location);
-        }
-
-        boolean success = game.isValidMove(move);
-
-        if (success) {
-            player.sendPacket("MOVE IS VALID");
-            ClientHandler opp = player.getOpponent();
-            if (opp != null) {
-                opp.sendPacket(Protocol.MOVE + Protocol.SEPARATOR + nextPiece + Protocol.SEPARATOR + location);
-            }
-        }
-        else {
-            player.sendPacket(Protocol.ERROR + Protocol.SEPARATOR + "Invalid Move");
-        }
+        GameSession session = activeSessions.get(player);
+        session.handleMove(player, nextPiece, location);
     }
 
-
-
-    public synchronized boolean isLoggedIn(String  player) {
+    public synchronized boolean isLoggedIn(String player) {
         for (ClientHandler client : clients) {
             if (player.equals(client.getUsername())) {
                 return true;
@@ -88,39 +50,29 @@ public class GameServer extends SocketServer {
         return false;
     }
 
-    public synchronized void addToQueue(ClientHandler player){
-        if (activeGames.containsKey(player) || waitingplayers.contains(player)){
+    public synchronized void addToQueue(ClientHandler player) {
+        if (activeSessions.containsKey(player) || waitingPlayers.contains(player)) {
             player.sendPacket(Protocol.ERROR + Protocol.SEPARATOR + "Already in game or queue");
             return;
         }
-        System.out.println(player + " is added to queue");
-        waitingplayers.add(player);
+        System.out.println(player.getUsername() + " added to queue");
+        waitingPlayers.add(player);
 
         checkQueue();
     }
 
+    public synchronized void checkQueue() {
+        if (waitingPlayers.size() >= 2) {
+            ClientHandler p1 = waitingPlayers.remove(0);
+            ClientHandler p2 = waitingPlayers.remove(0);
+            GameSession session = new GameSession(p1, p2, nextGameId++);
 
-    public void checkQueue() {
-        if (waitingplayers.size() >= 2){
-            ClientHandler p1 = waitingplayers.remove(0);
-            ClientHandler p2 = waitingplayers.remove(0);
-            p1.setPlayerID(0);
-            p2.setPlayerID(1);
-            Game game = new Game(0);
-
-            activeGames.put(p1, game);
-            activeGames.put(p2, game);
-
-            p1.setOpponent(p2);
-            p2.setOpponent(p1);
-
-            p1.sendPacket(Protocol.NEWGAME + Protocol.SEPARATOR + p2.getUsername() + Protocol.SEPARATOR + "0");
-            p2.sendPacket(Protocol.NEWGAME + Protocol.SEPARATOR + p1.getUsername() + Protocol.SEPARATOR + "1");
-
-            System.out.println("GAME STARTED");
-
+            activeSessions.put(p1, session);
+            activeSessions.put(p2, session);
+            session.startGame();
         }
     }
+
     public synchronized String getUserList() {
         StringBuilder sb = new StringBuilder();
         for (ClientHandler client : clients) {
@@ -134,54 +86,36 @@ public class GameServer extends SocketServer {
         return sb.toString();
     }
 
-
     public synchronized void broadcast(String message) {
         for (ClientHandler client : clients) {
             client.sendPacket(message);
         }
     }
 
-    public boolean inGame(ClientHandler username){
-        if (activeGames.containsKey(username)){
-            return true;
-        }
-        else return false;
-    }
     public synchronized void handleDisconnect(ClientHandler player) {
-        if (waitingplayers.remove(player)) {
-            System.out.println(player.getUsername() + " deleted from queue");
+        if (waitingPlayers.remove(player)) {
+            System.out.println(player.getUsername() + " removed from queue");
             return;
         }
-
-        if (activeGames.containsKey(player)) {
-            Game game = activeGames.get(player);
+        if (activeSessions.containsKey(player)) {
+            GameSession session = activeSessions.get(player);
+            session.disconnect(player);
             ClientHandler opponent = player.getOpponent();
-
-            System.out.println("Opponent has disconnected");
-
             if (opponent != null) {
-                opponent.sendPacket(Protocol.GAMEOVER + Protocol.SEPARATOR + Protocol.VICTORY);
-                activeGames.remove(opponent);
-                opponent.setOpponent(null);
+                activeSessions.remove(opponent);
             }
-
-            activeGames.remove(player);
+            activeSessions.remove(player);
         }
-    }
-
-    public void close(){
-        super.close();
+        clients.remove(player);
     }
 
     public static void main(String[] args) throws IOException {
         Scanner input = new Scanner(System.in);
-        System.out.println("Enter the port number: ");
+        System.out.println("Enter the port number (0 for random): ");
         String s = input.nextLine();
         int port = Integer.parseInt(s);
         GameServer server = new GameServer(port);
-        System.out.println("Server is on prot: " + port + "...");
+        System.out.println("Server is on port: " + server.getPort() + "...");
         server.acceptConnections();
-        System.out.println("Server is stopped.");
     }
-
 }

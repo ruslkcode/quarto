@@ -108,6 +108,9 @@ public class ClientHandler extends SocketConnection {
         }
     }
 
+    public GameServer getServer() {
+        return this.server;
+    }
     @Override
     public void handleDisconnect() {
         System.out.println(Protocol.DISCONNECT + Protocol.SEPARATOR + this.username);

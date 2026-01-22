@@ -16,10 +16,13 @@ public class GameServer extends SocketServer {
 
     private final Map<ClientHandler, GameSession> activeSessions = new HashMap<>();
 
+    private FileStorage storage;
+
     private int nextGameId = 1;
 
     protected GameServer(int port) throws IOException {
         super(port);
+        this.storage = new FileStorage();
     }
 
     @Override
@@ -31,7 +34,7 @@ public class GameServer extends SocketServer {
         clientHandler.start();
     }
 
-    public void handleMove(ClientHandler player, int nextPiece, int location) {
+    public synchronized void handleMove(ClientHandler player, int nextPiece, int location) {
         if (!activeSessions.containsKey(player)) {
             player.sendPacket(Protocol.ERROR + Protocol.SEPARATOR + "Not in game");
             return;
@@ -107,6 +110,21 @@ public class GameServer extends SocketServer {
             activeSessions.remove(player);
         }
         clients.remove(player);
+    }
+
+    public synchronized void endSession(ClientHandler player1, ClientHandler player2) {
+        if (activeSessions.containsKey(player1)) {
+            activeSessions.remove(player1);
+        }
+        if (activeSessions.containsKey(player2)) {
+            activeSessions.remove(player2);
+        }
+        System.out.println("Session ended. Players " + player1.getUsername() + " and " + player2.getUsername() + " are free.");
+    }
+
+
+    public void updateMmr(String username, int points) {
+        storage.updateMmr(username, points);
     }
 
     public static void main(String[] args) throws IOException {

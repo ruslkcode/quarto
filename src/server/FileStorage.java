@@ -2,6 +2,7 @@ package server;
 
 import java.io.*;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 
 public class FileStorage {
@@ -40,11 +41,29 @@ public class FileStorage {
 
     public void save(){
         try (BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(FILE_NAME))){
-            for ()
+            for (String name : ratings.keySet()){
+                int mmr = ratings.get(name);
+                bufferedWriter.write(name + ":" + mmr);
+                bufferedWriter.newLine();
+            }
 
         } catch (IOException e) {
             e.getMessage();
         }
+
     }
+    public int getMmr(String username){
+        return ratings.getOrDefault(username, 1000);
+    }
+
+    public void updateMmr(String username, int point){
+        int currentMmr = getMmr(username);
+        int newMmr = currentMmr + point;
+        if (newMmr < 0) newMmr = 0;
+        ratings.put(username, newMmr);
+        save();
+    }
+
+
 
 }

@@ -168,4 +168,38 @@ public class Game {
     private void switchPlayer() {
         currentPlayer = (currentPlayer == 1) ? 2 : 1;
     }
+
+    /**
+     * Getter for the current piece id.
+     * @return the current piece id.
+     */
+
+    public int getCurrentPieceID() {
+        return currentPieceID;
+    }
+
+    /**
+     * Getter for all available pieces.
+     * @return the map with id's as a key, and the value as a piece.
+     */
+
+    public Map<Integer, Piece> getAvailablePieces(){
+        return availablePieces;
+    }
+
+    /**
+     * Getter for all pieces.
+     * @return the map with id's as a key, and the value as a piece.
+     */
+    public Map<Integer, Piece> getAllPieces(){
+        return allPieces;
+    }
+
+    /**
+     * Getter for the board.
+     * @return the board.
+     */
+    public Board getBoard() {
+        return board;
+    }
 }

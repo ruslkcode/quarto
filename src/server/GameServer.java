@@ -133,7 +133,7 @@ public class GameServer extends SocketServer {
         String s = input.nextLine();
         int port = Integer.parseInt(s);
         GameServer server = new GameServer(port);
-        System.out.println("Server is on port: " + server.getPort() + "...");
+        System.out.println("Server is on port: " + server.getPort());
         server.acceptConnections();
     }
 }

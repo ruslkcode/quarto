@@ -45,55 +45,78 @@ public class GameSession {
         ClientHandler opponent = player.getOpponent();
         String msg = "";
         if (nextPiece == 16) {
-            Move move = new Move(0, location);
 
-            if (gameLogic.getBoard().isEmptyField(location)) {
-
-                gameLogic.doMove(move);
-
-                if (gameLogic.getWinner() != 0) {
-                    msg = Protocol.GAMEOVER + Protocol.SEPARATOR + Protocol.VICTORY + Protocol.SEPARATOR + player.getUsername();
-                    player.getServer().updateMmr(player.getUsername(), 25);
-                    player.getOpponent().getServer().updateMmr(player.getUsername(), -25);
-                    player.getServer().endSession(player1, player2);
-                } else {
-                    msg = Protocol.GAMEOVER + Protocol.SEPARATOR + Protocol.VICTORY + Protocol.SEPARATOR + opponent.getUsername();
-                    player.getServer().updateMmr(player.getUsername(), 25);
-                    player.getOpponent().getServer().updateMmr(player.getUsername(), -25);
-
-                    player.getServer().endSession(player1, player2);
-
-                }
-                gameEnded = true;
-            } else {
-                player.sendPacket(Protocol.ERROR + Protocol.SEPARATOR + "Invalid Move (Location occupied)");
+            if (location == -1) {
+                player.sendPacket(Protocol.ERROR + Protocol.SEPARATOR + "Winning move requires a location");
                 return;
             }
+
+            if (gameLogic.getCurrentPieceID() == -1) {
+                player.sendPacket(Protocol.ERROR + Protocol.SEPARATOR + "Cannot claim victory without a placed piece");
+                return;
+            }
+
+            Move move = new Move(gameLogic.getCurrentPieceID(), location);
+
+            gameLogic.doMove(move);
+
+            if (gameLogic.getWinner() == player.getPlayerID()) {
+                msg = Protocol.GAMEOVER + Protocol.SEPARATOR
+                        + Protocol.VICTORY + Protocol.SEPARATOR
+                        + player.getUsername();
+
+                player.getServer().updateMmr(player.getUsername(), 25);
+                player.getServer().updateMmr(opponent.getUsername(), -25);
+            } else {
+                // False win claim -> immediate loss
+                msg = Protocol.GAMEOVER + Protocol.SEPARATOR
+                        + Protocol.VICTORY + Protocol.SEPARATOR
+                        + opponent.getUsername();
+
+                player.getServer().updateMmr(player.getUsername(), -25);
+                player.getServer().updateMmr(opponent.getUsername(), 25);
+            }
+
+            gameEnded = true;
         }
         else if (nextPiece == 17) {
-            msg = Protocol.GAMEOVER + Protocol.SEPARATOR + Protocol.DRAW;
-            player.getServer().endSession(player1, player2);
+            if (gameLogic.isDraw()) {
+                msg = Protocol.GAMEOVER + Protocol.SEPARATOR + Protocol.DRAW;
+            } else {
+                // False draw claim -> opponent wins
+                msg = Protocol.GAMEOVER + Protocol.SEPARATOR
+                        + Protocol.VICTORY + Protocol.SEPARATOR
+                        + opponent.getUsername();
+
+                player.getServer().updateMmr(player.getUsername(), -25);
+                player.getServer().updateMmr(opponent.getUsername(), 25);
+            }
+
             gameEnded = true;
         }
         else {
-            Move move;
-            if (location == -1) move = new Move(nextPiece);
-            else move = new Move(nextPiece, location);
+            Move move = (location == -1)
+                    ? new Move(nextPiece)
+                    : new Move(nextPiece, location);
 
-            if (gameLogic.isValidMove(move)) {
-                gameLogic.doMove(move);
-
-                if (gameLogic.isDraw()) {
-                    msg = Protocol.GAMEOVER + Protocol.SEPARATOR + Protocol.DRAW;
-                    player.getServer().endSession(player1, player2);
-                    gameEnded = true;
-                } else {
-                    if (location == -1) msg = Protocol.MOVE + Protocol.SEPARATOR + nextPiece;
-                    else msg = Protocol.MOVE + Protocol.SEPARATOR + location + Protocol.SEPARATOR + nextPiece;
-                }
-            } else {
-                player.sendPacket(Protocol.ERROR + Protocol.SEPARATOR + "Invalid Move");
+            if (!gameLogic.isValidMove(move)) {
+                player.sendPacket(Protocol.ERROR + Protocol.SEPARATOR + "Invalid move");
                 return;
+            }
+
+            gameLogic.doMove(move);
+
+            // Check automatic draw
+            if (gameLogic.isDraw()) {
+                msg = Protocol.GAMEOVER + Protocol.SEPARATOR + Protocol.DRAW;
+                gameEnded = true;
+            } else {
+                if (location == -1) {
+                    msg = Protocol.MOVE + Protocol.SEPARATOR + nextPiece;
+                } else {
+                    msg = Protocol.MOVE + Protocol.SEPARATOR
+                            + location + Protocol.SEPARATOR + nextPiece;
+                }
             }
         }
         if (!msg.isEmpty()) {

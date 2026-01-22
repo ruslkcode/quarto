@@ -9,13 +9,16 @@ import java.net.Socket;
  * Parses incoming messages and notifies the TUI via the GameListener interface.
  */
 public class QuartoClient {
+
     private Socket socket;
     private BufferedReader in;
     private BufferedWriter out;
     private GameListener listener;
-    private boolean running = false;
+    private volatile boolean running = false;
 
-    // Interface to notify TUI about game events
+    /**
+     * Listener interface used by the TUI.
+     */
     public interface GameListener {
         void onConnected();
         void onNewGame(String p1, String p2);
@@ -32,59 +35,85 @@ public class QuartoClient {
         this.listener = listener;
         this.running = true;
 
-        new Thread(this::listen).start();
-        if (listener != null) listener.onConnected();
+        new Thread(this::listen, "QuartoClient-Listener").start();
+
+        if (listener != null) {
+            listener.onConnected();
+        }
     }
 
+    /**
+     * Main network listening loop.
+     */
     private void listen() {
         try {
             String msg;
             while (running && (msg = in.readLine()) != null) {
+
                 if (listener == null) continue;
 
                 String[] parts = msg.split(Protocol.SEPARATOR);
                 String cmd = parts[0];
 
                 switch (cmd) {
-                    case Protocol.NEWGAME:
-                        String p1 = (parts.length > 1) ? parts[1] : "";
-                        String p2 = (parts.length > 2) ? parts[2] : "";
+
+                    case Protocol.NEWGAME -> {
+                        String p1 = parts.length > 1 ? parts[1] : "";
+                        String p2 = parts.length > 2 ? parts[2] : "";
                         listener.onNewGame(p1, p2);
-                        break;
+                    }
 
-                    case Protocol.MOVE:
-                        // MOVE~LOC~PIECE or MOVE~PIECE (first move)
-                        if (parts.length == 2) {
-                            int piece = Integer.parseInt(parts[1]);
-                            listener.onOpponentMove(-1, piece);
-                        } else if (parts.length == 3) {
-                            int loc = Integer.parseInt(parts[1]);
-                            int piece = Integer.parseInt(parts[2]);
-                            listener.onOpponentMove(loc, piece);
+                    case Protocol.MOVE -> {
+                        try {
+                            if (parts.length == 2) {
+                                int piece = Integer.parseInt(parts[1]);
+                                listener.onOpponentMove(-1, piece);
+                            } else if (parts.length == 3) {
+                                int loc = Integer.parseInt(parts[1]);
+                                int piece = Integer.parseInt(parts[2]);
+                                listener.onOpponentMove(loc, piece);
+                            }
+                        } catch (NumberFormatException e) {
+                            handleFatalError("Malformed MOVE message");
                         }
-                        break;
+                    }
 
-                    case Protocol.GAMEOVER:
-                        String res = (parts.length > 1) ? parts[1] : "DRAW";
-                        String win = (parts.length > 2) ? parts[2] : "";
-                        listener.onGameOver(res, win);
-                        break;
+                    case Protocol.GAMEOVER -> {
+                        String result = parts.length > 1 ? parts[1] : Protocol.DRAW;
+                        String winner = parts.length > 2 ? parts[2] : "";
+                        listener.onGameOver(result, winner);
 
-                    case Protocol.CHAT:
-                        if (parts.length > 2) listener.onChat(parts[1], parts[2]);
-                        break;
+                        // Game is finished, no further communication expected
+                        shutdown();
+                        return;
+                    }
 
-                    case Protocol.ERROR:
-                        listener.onError((parts.length > 1) ? parts[1] : "Unknown");
-                        break;
+                    case Protocol.CHAT -> {
+                        if (parts.length > 2) {
+                            listener.onChat(parts[1], parts[2]);
+                        }
+                    }
+
+                    case Protocol.ERROR -> {
+                        String errorMsg = parts.length > 1 ? parts[1] : "Unknown error";
+                        listener.onError(errorMsg);
+
+                        // Reference server disconnects after ERROR
+                        shutdown();
+                        return;
+                    }
                 }
             }
         } catch (IOException e) {
-            if (running) listener.onError("Connection lost: " + e.getMessage());
+            if (running && listener != null) {
+                listener.onError("Connection lost");
+            }
+        } finally {
+            shutdown();
         }
     }
 
-    // --- Sending Methods ---
+    // ================== Sending ==================
 
     public void login(String username) {
         send(Protocol.LOGIN + Protocol.SEPARATOR + username);
@@ -95,6 +124,8 @@ public class QuartoClient {
     }
 
     public void sendMove(int location, int nextPiece) {
+        if (!running) return;
+
         if (location == -1) {
             send(Protocol.MOVE + Protocol.SEPARATOR + nextPiece);
         } else {
@@ -107,17 +138,43 @@ public class QuartoClient {
     }
 
     public void close() {
-        running = false;
-        try { if (socket != null) socket.close(); } catch (IOException e) {}
+        shutdown();
     }
 
-    private void send(String msg) {
+    /**
+     * Sends a message to the server if the connection is still alive.
+     */
+    private synchronized void send(String msg) {
+        if (!running) return;
+
         try {
             out.write(msg);
             out.newLine();
             out.flush();
         } catch (IOException e) {
-            e.printStackTrace();
+            shutdown();
         }
+    }
+
+    /**
+     * Gracefully shuts down the client and releases resources.
+     */
+    private synchronized void shutdown() {
+        if (!running) return;
+        running = false;
+
+        try { if (socket != null) socket.close(); } catch (IOException ignored) {}
+        try { if (in != null) in.close(); } catch (IOException ignored) {}
+        try { if (out != null) out.close(); } catch (IOException ignored) {}
+    }
+
+    /**
+     * Handles unrecoverable protocol errors.
+     */
+    private void handleFatalError(String message) {
+        if (listener != null) {
+            listener.onError(message);
+        }
+        shutdown();
     }
 }

@@ -23,6 +23,8 @@ public class QuartoTUI implements QuartoClient.GameListener {
     private Game localGame;
     private String username;
     private Scanner scanner;
+    private HumanClient humanClient;
+
 
     // Game State
     private int[] visualBoard = new int[16];
@@ -43,53 +45,49 @@ public class QuartoTUI implements QuartoClient.GameListener {
         client = new QuartoClient();
         Arrays.fill(visualBoard, -1);
 
-        System.out.println("╔════════════════════════════╗");
-        System.out.println("║    QUARTO CLIENT (STABLE)  ║");
-        System.out.println("╚════════════════════════════╝");
-
         System.out.print("Enter Username: ");
-        username = scanner.nextLine();
-        if (username.isBlank()) username = "Player" + (int)(Math.random() * 100);
+        username = scanner.nextLine().trim();
+        if (username.isEmpty()) {
+            username = "Player" + (int)(Math.random() * 100);
+        }
 
-        System.out.println("\nSelect Player Type:");
+        System.out.println("Select Player Type:");
         System.out.println("1. Human");
-        System.out.println("2. AI (Bot)");
-        System.out.print("> ");
-        String type = scanner.nextLine();
+        System.out.println("2. AI");
+        String type = scanner.nextLine().trim();
 
         if (type.equals("2")) {
             isAiMode = true;
             setupAI();
         } else {
             isAiMode = false;
-            System.out.println("✅ Mode: HUMAN");
+            humanClient = new HumanClient(username, scanner);
         }
 
-        System.out.print("Server Port (Enter for 5432): ");
+        System.out.print("Server port (Enter for 5432): ");
         int port = 5432;
         try {
-            String input = scanner.nextLine();
-            if (!input.isBlank()) port = Integer.parseInt(input);
-        } catch (Exception e) {}
+            String p = scanner.nextLine().trim();
+            if (!p.isEmpty()) port = Integer.parseInt(p);
+        } catch (Exception ignored) {}
 
         try {
             client.connect("localhost", port, this);
             client.login(username);
 
-            if (isAiMode) {
-                System.out.println("🤖 Bot started. Auto-queueing...");
-                Thread.sleep(500);
-                client.queue();
-                // Bot keeps main thread alive
-                while(true) { Thread.sleep(1000); }
+            if (!isAiMode) {
+                humanCommandLoop();   // человек сам пишет queue
             } else {
-                mainInputLoop();
+                client.queue();       // AI сразу в очередь
+                while (true) Thread.sleep(1000);
             }
 
         } catch (Exception e) {
-            System.out.println("❌ Connection Error: " + e.getMessage());
+            System.out.println("Connection error: " + e.getMessage());
         }
     }
+
+
 
     private void setupAI() {
         System.out.println("Select AI Strategy:");
@@ -110,98 +108,50 @@ public class QuartoTUI implements QuartoClient.GameListener {
     // ==========================================
     // HUMAN INPUT LOOP
     // ==========================================
-    private void mainInputLoop() {
-        System.out.println("\n--- MAIN MENU ---");
-        System.out.println("Type 'queue' to play, 'list' for players.");
 
-        while (scanner.hasNextLine()) {
-            String line = scanner.nextLine().trim();
-            if (line.isEmpty()) continue;
+    private void makeHumanMove() {
+        new Thread(() -> {
+            try {
+                Move move = humanClient.determineMove(localGame);
+                if (move == null) return;
 
-            // Only process moves if it's OUR turn and we are NOT waiting for server confirmation
-            if (isGameActive && isMyTurn && !waitingForServerEcho) {
-                processHumanMoveInput(line);
-                continue;
+                waitingForServerEcho = true; // ONLY after move is chosen
+                client.sendMove(move.getLocation(), move.getNextPiece());
+
+            } catch (Exception e) {
+                System.out.println("Human move error: " + e.getMessage());
+                waitingForServerEcho = false;
             }
+        }).start();
+    }
 
-            String cmd = line.split(" ")[0].toLowerCase();
+
+
+    private void humanCommandLoop() {
+        while (true) {
+            String cmd = scanner.nextLine().trim().toLowerCase();
+
             switch (cmd) {
-                case "queue": client.queue(); break;
-                case "list": client.listPlayers(); break;
-                //case "chat": client.sendChat(line.substring(4).trim()); break;
-                case "quit": client.close(); System.exit(0); break;
+                case "queue":
+                    client.queue();
+                    break;
+                case "list":
+                    client.listPlayers();
+                    break;
+                case "quit":
+                    client.close();
+                    System.exit(0);
+                    break;
                 default:
-                    if (isGameActive) {
-                        if (waitingForServerEcho) System.out.println("⚠️ Waiting for server confirmation...");
-                        else System.out.println("⚠️ Not your turn! Opponent is thinking.");
-                    } else {
-                        System.out.println("Unknown command.");
-                    }
+                    System.out.println("Commands: queue | list | quit");
             }
         }
     }
 
-    private void processHumanMoveInput(String line) {
-        try {
-            String[] parts = line.split("\\s+");
 
-            // Scenario 1: First Move (Just giving a piece)
-            if (pieceInHand == -1) {
-                if (parts.length != 1) {
-                    System.out.println("❌ Invalid format. Enter: <PIECE_TO_GIVE>");
-                    return;
-                }
-                int pieceToGive = Integer.parseInt(parts[0]);
-                if (!isValidPiece(pieceToGive)) {
-                    System.out.println("❌ Invalid Piece ID (must be available).");
-                    return;
-                }
 
-                // IMPORTANT: We do NOT update localGame yet. We wait for server echo.
-                client.sendMove(-1, pieceToGive);
-                waitingForServerEcho = true; // Lock input
-                System.out.println("⏳ Sending move...");
-                return;
-            }
 
-            // Scenario 2: Normal Move (Place + Give)
-            if (parts.length != 2) {
-                System.out.println("❌ Format: <LOCATION> <PIECE_TO_GIVE>");
-                return;
-            }
-
-            int loc = Integer.parseInt(parts[0]);
-            int pieceToGive = Integer.parseInt(parts[1]);
-
-            if (loc < 0 || loc > 15 || visualBoard[loc] != -1) {
-                System.out.println("❌ Invalid Location.");
-                return;
-            }
-            if (!isValidPiece(pieceToGive)) {
-                System.out.println("❌ Invalid Piece ID.");
-                return;
-            }
-
-            // Send to server and wait
-            client.sendMove(loc, pieceToGive);
-            waitingForServerEcho = true; // Lock input
-            System.out.println("⏳ Sending move...");
-
-        } catch (NumberFormatException e) {
-            System.out.println("❌ Numbers only.");
-        } catch (Exception e) {
-            System.out.println("❌ Error: " + e.getMessage());
-        }
-    }
-
-    private boolean isValidPiece(int id) {
-        if (id < 0 || id > 15) return false;
-        return localGame.getAvailablePieces().containsKey(id) && id != pieceInHand;
-    }
-
-    // ==========================================
     // NETWORK EVENTS
-    // ==========================================
 
     @Override
     public void onConnected() {
@@ -213,83 +163,53 @@ public class QuartoTUI implements QuartoClient.GameListener {
         localGame = new Game(1);
         Arrays.fill(visualBoard, -1);
         pieceInHand = -1;
+
         isGameActive = true;
-        isMyTurn = false;
         waitingForServerEcho = false;
+        isMyTurn = false;
 
-        if (!isAiMode) System.out.println("\n🟢 NEW GAME STARTED: " + p1 + " vs " + p2);
-
-        // ALWAYS draw board on start so P2 can see grid
-        if (!isAiMode) drawBoard();
+        drawBoard();
 
         if (p1.equals(username)) {
             isMyTurn = true;
-            if (isAiMode) {
-                makeAiMove();
-            } else {
-                System.out.println("👉 YOU START! Pick a piece to give.");
-                System.out.println("✍️  Enter: <PIECE_TO_GIVE>");
-            }
+            triggerMyMove();
         } else {
-            if (!isAiMode) System.out.println("⏳ Opponent's turn to pick the first piece...");
+            System.out.println("Opponent starts.");
         }
     }
+
 
     // This handles BOTH Opponent moves AND our own echoed moves
     @Override
     public void onOpponentMove(int location, int piece) {
         if (localGame == null) return;
 
-        try {
-            int placedPiece = -1;
+        int placed = -1;
 
-            // Apply logic update
-            if (location == -1) {
-                localGame.doMove(new Move(piece));
-            } else {
-                placedPiece = localGame.getCurrentPieceID();
-                localGame.doMove(new Move(piece, location));
-                visualBoard[location] = placedPiece;
-            }
+        if (location == -1) {
+            localGame.doMove(new Move(piece));
+        } else {
+            placed = localGame.getCurrentPieceID();
+            localGame.doMove(new Move(piece, location));
+            visualBoard[location] = placed;
+        }
 
-            // Logic to distinguish WHO made the move
-            if (waitingForServerEcho) {
-                // It was MY move echoing back
-                waitingForServerEcho = false; // Unlock
-                isMyTurn = false;             // My turn is over
-                if (!isAiMode) {
-                    drawBoard(); // Redraw with my move
-                    System.out.println("✅ Move accepted. Opponent is thinking...");
-                }
-            } else {
-                // It was OPPONENT'S move
-                pieceInHand = piece; // Now I hold this piece
-                isMyTurn = true;     // Now it's my turn
+        if (waitingForServerEcho) {
+            waitingForServerEcho = false;
+            isMyTurn = false;
+            drawBoard();
+            return;
+        }
 
-                if (!isAiMode) {
-                    if (location == -1) {
-                        System.out.println("🔻 Opponent gave you piece: [" + piece + "]");
-                    } else {
-                        System.out.println("🔻 Opponent placed [" + placedPiece + "] at " + location + " and gave [" + piece + "]");
-                    }
-                    drawBoard(); // Redraw with opponent move
+        pieceInHand = piece;
+        isMyTurn = true;
+        drawBoard();
 
-                    if (!localGame.isGameOver()) {
-                        System.out.println("✋ YOU HAVE: [" + pieceInHand + "]");
-                        System.out.println("✍️  Enter: <LOCATION> <PIECE_TO_GIVE>");
-                    }
-                }
-
-                // If AI, trigger response
-                if (isAiMode && isGameActive) {
-                    makeAiMove();
-                }
-            }
-
-        } catch (Exception e) {
-            System.out.println("Sync error: " + e.getMessage());
+        if (isGameActive) {
+            triggerMyMove();
         }
     }
+
 
     private void makeAiMove() {
         if (waitingForServerEcho) return;
@@ -390,4 +310,15 @@ public class QuartoTUI implements QuartoClient.GameListener {
         String f = isSolid  ? "*" : "_";
         return String.format("%s%s%s%s", h, c, s, f);
     }
+
+    private void triggerMyMove() {
+        if (!isGameActive || !isMyTurn || waitingForServerEcho) return;
+
+        if (isAiMode) {
+            makeAiMove();
+        } else {
+            makeHumanMove();
+        }
+    }
+
 }

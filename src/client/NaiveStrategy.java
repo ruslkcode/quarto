@@ -3,85 +3,112 @@ package client;
 import gameLogic.Game;
 import gameLogic.Move;
 import gameLogic.Piece;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 /**
- * A simple bot strategy that picks a random valid move.
- * Useful for testing or easy difficulty.
+ * A simple bot strategy that selects a random valid move.
+ * Fully protocol-safe: supports last move, win (16), and draw (17).
  */
-
 public class NaiveStrategy implements BotStrategy {
 
     @Override
     public String getName() {
-        return "Naive (Random)";
+        return "Naive";
     }
 
     /**
-     * Determines the next move randomly.
-     * @param game the current game state
-     * @return a random valid move, or null if no moves are possible
+     * Determines the next move by randomly selecting
+     * one of the valid moves.
+     *
+     * @param game current game state
+     * @return a valid move encoded according to protocol
      */
     /*@
-       requires game != null;
-       ensures \result != null;
+      requires game != null;
+      requires !game.isGameOver();
+      ensures \result != null;
     @*/
     @Override
     public Move determineMove(Game game) {
+
         List<Move> moves = getValidMoves(game);
 
+        // No legal moves → game must be finished
         if (moves.isEmpty()) {
-            return null; // Should ideally not happen if logic is correct
+            return game.getWinner() != 0
+                    ? new Move(16)
+                    : new Move(17);
         }
 
-        // Pick a random index
-        int randomIndex = (int) (Math.random() * moves.size());
-        return moves.get(randomIndex);
+        // Check for immediate win or draw
+        for (Move move : moves) {
+            Game copy = game.deepCopy();
+            copy.doMove(move);
+
+            if (copy.getWinner() == game.getCurrentPlayer()) {
+                return move.isFirstMove()
+                        ? new Move(16)
+                        : new Move(16, move.getLocation());
+            }
+
+            if (copy.isDraw()) {
+                return move.isFirstMove()
+                        ? new Move(17)
+                        : new Move(17, move.getLocation());
+            }
+        }
+
+        // Otherwise: random move
+        int idx = (int) (Math.random() * moves.size());
+        return moves.get(idx);
     }
 
     /**
      * Generates all valid moves for the current game state.
-     * Handles the special case of the last move (when no pieces are left to give).
+     * Correctly handles:
+     * - first move
+     * - normal turns
+     * - last move (no pieces left)
      *
-     * @param game the current game state.
-     * @return the list of valid moves.
+     * @param game current game state
+     * @return list of valid moves (possibly empty)
      */
     /*@
-       requires game != null;
-       ensures \result != null;
-       ensures \result.size() > 0;
+      requires game != null;
+      ensures \result != null;
     @*/
-    List<Move> getValidMoves(Game game) {
+    private List<Move> getValidMoves(Game game) {
+
         List<Move> result = new ArrayList<>();
         Map<Integer, Piece> pieces = game.getAvailablePieces();
 
-        // 1. First move: Board is empty, we only pick a piece to give.
+        // First move: only choose a piece
         if (game.getCurrentPieceID() == -1) {
-            for (int key : pieces.keySet()) {
-                result.add(new Move(key));
+            for (int pieceId : pieces.keySet()) {
+                result.add(new Move(pieceId));
             }
             return result;
         }
 
-        // 2. Normal & Last move
-        for (int i = 0; i < 16; i++) {
-            if (game.getBoard().isEmptyField(i)) {
+        // Normal / last move
+        for (int field = 0; field < 16; field++) {
+            if (!game.getBoard().isEmptyField(field)) {
+                continue;
+            }
 
-                // CRITICAL FIX: If there are no pieces left to give (Turn 16),
-                // we still need to place our current piece!
-                if (pieces.isEmpty()) {
-                    // Pass 0 (or -1) as nextPiece, it doesn't matter as game ends
-                    result.add(new Move(0, i));
-                } else {
-                    // Normal case: Place piece at 'i', give piece 'key'
-                    for (int key : pieces.keySet()) {
-                        result.add(new Move(key, i));
-                    }
+            // Last move: no piece to give
+            if (pieces.isEmpty()) {
+                result.add(new Move(0, field));
+            } else {
+                for (int pieceId : pieces.keySet()) {
+                    result.add(new Move(pieceId, field));
                 }
             }
         }
+
         return result;
     }
 }

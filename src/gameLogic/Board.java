@@ -1,5 +1,8 @@
 package gameLogic;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Represents a 4x4 Quarto board.
  * The board stores pieces placed on the fields and provides
@@ -251,7 +254,7 @@ public class Board {
      * @param pieces an array of pieces
      * @return true if all pieces are non-null and share a common attribute
      */
-    private boolean hasCommonAttribute(Piece[] pieces) {
+    public boolean hasCommonAttribute(Piece[] pieces) {
         for (Piece p : pieces) {
             if (p == null) return false;
         }

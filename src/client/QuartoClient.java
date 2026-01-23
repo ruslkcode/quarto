@@ -82,10 +82,6 @@ public class QuartoClient {
                         String result = parts.length > 1 ? parts[1] : Protocol.DRAW;
                         String winner = parts.length > 2 ? parts[2] : "";
                         listener.onGameOver(result, winner);
-
-                        // Game is finished, no further communication expected
-                        shutdown();
-                        return;
                     }
 
                     case Protocol.CHAT -> {

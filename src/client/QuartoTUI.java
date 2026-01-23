@@ -100,7 +100,6 @@ public class QuartoTUI implements QuartoClient.GameListener {
         if (choice.equals("2")) strategy = new SmartStrategy();
         else strategy = new NaiveStrategy();
 
-        // Give AI 1 second delay to feel like a real player
         aiClient = new AIClient(username, strategy, 1000);
         System.out.println("✅ AI Configured: " + strategy.getName());
     }
@@ -245,9 +244,15 @@ public class QuartoTUI implements QuartoClient.GameListener {
         localGame = null;
 
         if (isAiMode) {
-            try { Thread.sleep(2000); } catch (Exception e) {}
-            System.out.println("🤖 Bot re-queueing...");
-            client.queue();
+            new Thread(() -> {
+                try {
+                    Thread.sleep(2000);
+                    System.out.println("🤖 Bot re-queueing...");
+                    client.queue();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }).start();
         } else {
             System.out.println("Game Over. Type 'queue' to play again.");
         }
@@ -320,5 +325,4 @@ public class QuartoTUI implements QuartoClient.GameListener {
             makeHumanMove();
         }
     }
-
 }

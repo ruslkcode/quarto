@@ -149,7 +149,6 @@ public class SmartStrategy implements BotStrategy{
         return null;
     }
 
-
     /**
      * Filters moves in terms of getting rid of moves that immediately lead to loss.
      * @param game the current game.

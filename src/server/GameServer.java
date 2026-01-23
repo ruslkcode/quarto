@@ -98,6 +98,7 @@ public class GameServer extends SocketServer {
                 session.startGame();
 
                 checkQueue();
+                return;
             }
         }
     }

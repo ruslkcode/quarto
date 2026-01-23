@@ -230,7 +230,7 @@ public class QuartoTUI implements QuartoClient.GameListener {
     }
 
     @Override
-    public void onGameOver(String result, String winner) {
+    public  void onGameOver(String result, String winner) {
         isGameActive = false;
         isMyTurn = false;
         waitingForServerEcho = false;

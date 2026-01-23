@@ -15,6 +15,7 @@ public class GameServer extends SocketServer {
     private final ArrayList<ClientHandler> waitingPlayers = new ArrayList<>();
 
     private final Map<ClientHandler, GameSession> activeSessions = new HashMap<>();
+    private Map<ClientHandler, Integer> playersMmr = new HashMap<>();
 
     private FileStorage storage;
 
@@ -165,6 +166,10 @@ public class GameServer extends SocketServer {
             activeSessions.remove(player2);
         }
         System.out.println("Session ended. Players " + player1.getUsername() + " and " + player2.getUsername() + " are free.");
+    }
+
+    public synchronized String getProtocolRankings() {
+        return storage.getRankingsForProtocol();
     }
 
 

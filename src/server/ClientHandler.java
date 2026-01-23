@@ -111,6 +111,10 @@ public class ClientHandler extends SocketConnection {
                         server.broadcast(Protocol.CHAT + Protocol.SEPARATOR + this.username + Protocol.SEPARATOR + text);
                     }
                     break;
+                case Protocol.RANK:
+                    String payload = server.getProtocolRankings();
+                    sendPacket(Protocol.RANK + payload);
+                    break;
             }
         } catch (Exception e) {
             e.printStackTrace();

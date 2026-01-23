@@ -65,5 +65,22 @@ public class FileStorage {
     }
 
 
+    public String getRankingsForProtocol() {
+        java.util.List<java.util.Map.Entry<String, Integer>> list = new java.util.ArrayList<>(ratings.entrySet());
+        list.sort((o1, o2) -> o2.getValue().compareTo(o1.getValue()));
+
+        StringBuilder sb = new StringBuilder();
+
+        for (java.util.Map.Entry<String, Integer> entry : list) {
+            sb.append(protocol.Protocol.SEPARATOR)
+                    .append(entry.getKey())
+                    .append(protocol.Protocol.SEPARATOR)
+                    .append(entry.getValue());
+        }
+
+        // Пример результата: "~Alice~1200~Bob~1000"
+        return sb.toString();
+    }
+
 
 }

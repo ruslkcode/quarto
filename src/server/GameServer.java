@@ -76,7 +76,7 @@ public class GameServer extends SocketServer {
         for (int i = 0; i < waitingPlayers.size(); i++) {
             ClientHandler p1Candidate = waitingPlayers.get(i);
             long waitTime = currentTime - p1Candidate.getQueueJoinTime();
-            int currentDiff = 500 + (int) ((waitTime / 50000) * 500);
+            int currentDiff = 500 + (int) ((waitTime / 20000) * 500);
 
             for (int j = i + 1; j < waitingPlayers.size(); j++) {
                 ClientHandler p2Candidate = waitingPlayers.get(j);

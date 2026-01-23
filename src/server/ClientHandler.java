@@ -12,10 +12,19 @@ public class ClientHandler extends SocketConnection {
     private GameServer server;
     private ClientHandler opponent;
     private int playerID;
+    private long queueJoinTime = 0;
+
 
     protected ClientHandler(Socket socket, GameServer server) throws IOException {
         super(socket);
         this.server = server;
+    }
+    public void setQueueJoinTime(long time) {
+        this.queueJoinTime = time;
+    }
+
+    public long getQueueJoinTime() {
+        return this.queueJoinTime;
     }
 
     public String getUsername() {

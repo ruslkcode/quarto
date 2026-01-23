@@ -25,6 +25,7 @@ public class GameServer extends SocketServer {
         this.storage = new FileStorage();
     }
 
+
     @Override
     protected void handleConnection(Socket socket) throws IOException {
         ClientHandler clientHandler = new ClientHandler(socket, this);
@@ -58,6 +59,9 @@ public class GameServer extends SocketServer {
             player.sendPacket(Protocol.ERROR + Protocol.SEPARATOR + "Already in game or queue");
             return;
         }
+
+        player.setQueueJoinTime(System.currentTimeMillis());
+
         System.out.println(player.getUsername() + " added to queue");
         waitingPlayers.add(player);
 
@@ -65,16 +69,40 @@ public class GameServer extends SocketServer {
     }
 
     public synchronized void checkQueue() {
-        if (waitingPlayers.size() >= 2) {
-            ClientHandler p1 = waitingPlayers.remove(0);
-            ClientHandler p2 = waitingPlayers.remove(0);
-            GameSession session = new GameSession(p1, p2, nextGameId++);
+        ClientHandler player1 = null;
+        ClientHandler player2 = null;
+        long currentTime = System.currentTimeMillis();
 
-            activeSessions.put(p1, session);
-            activeSessions.put(p2, session);
-            session.startGame();
+        for (int i = 0; i < waitingPlayers.size(); i++) {
+            ClientHandler p1Candidate = waitingPlayers.get(i);
+            long waitTime = currentTime - p1Candidate.getQueueJoinTime();
+            int currentDiff = 500 + (int) ((waitTime / 50000) * 500);
+
+            for (int j = i + 1; j < waitingPlayers.size(); j++) {
+                ClientHandler p2Candidate = waitingPlayers.get(j);
+
+
+                if (Math.abs(storage.getMmr(p1Candidate.getUsername()) - storage.getMmr(p2Candidate.getUsername())) <= currentDiff) {
+                    player1 = p1Candidate;
+                    player2 = p2Candidate;
+                    break;
+                }
+            }
+            if (player1 != null && player2 != null) {
+                waitingPlayers.remove(player1);
+                waitingPlayers.remove(player2);
+
+                GameSession session = new GameSession(player1, player2, nextGameId++);
+                activeSessions.put(player1, session);
+                activeSessions.put(player2, session);
+                session.startGame();
+
+                checkQueue();
+            }
         }
     }
+
+
 
     public synchronized String getUserList() {
         StringBuilder sb = new StringBuilder();

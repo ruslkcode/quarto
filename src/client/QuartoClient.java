@@ -94,7 +94,6 @@ public class QuartoClient {
                         String errorMsg = parts.length > 1 ? parts[1] : "Unknown error";
                         listener.onError(errorMsg);
 
-                        // Reference server disconnects after ERROR
                         shutdown();
                         return;
                     }

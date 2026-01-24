@@ -318,7 +318,6 @@ public class QuartoTUI implements QuartoClient.GameListener {
 
     private void triggerMyMove() {
         if (!isGameActive || !isMyTurn || waitingForServerEcho) return;
-
         if (isAiMode) {
             makeAiMove();
         } else {

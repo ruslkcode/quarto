@@ -170,7 +170,9 @@ public class Game {
      * Getter for the current piece id.
      * @return the current piece id.
      */
-
+    /*@
+        @pure
+    */
     public int getCurrentPieceID() {
         return currentPieceID;
     }
@@ -179,7 +181,9 @@ public class Game {
      * Getter for all available pieces.
      * @return the map with id's as a key, and the value as a piece.
      */
-
+    /*@
+        @pure
+    */
     public Map<Integer, Piece> getAvailablePieces(){
         return availablePieces;
     }
@@ -188,6 +192,9 @@ public class Game {
      * Getter for all pieces.
      * @return the map with id's as a key, and the value as a piece.
      */
+    /*@
+        @pure
+    */
     public Map<Integer, Piece> getAllPieces(){
         return allPieces;
     }

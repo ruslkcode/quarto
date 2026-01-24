@@ -247,13 +247,17 @@ public class Board {
     public boolean gameOver() {
         return hasWinner() || isFull();
     }
-
     /**
      * Checks whether the given pieces share at least one common attribute.
      *
      * @param pieces an array of pieces
      * @return true if all pieces are non-null and share a common attribute
      */
+    /*@
+      requires pieces != null;
+      requires pieces.length > 0;
+      requires (\forall int i; 0 <= i && i < pieces.length; pieces[i] != null);
+    @*/
     public boolean hasCommonAttribute(Piece[] pieces) {
         for (Piece p : pieces) {
             if (p == null) return false;

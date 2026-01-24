@@ -11,5 +11,6 @@
     <orderEntry type="library" exported="" name="commons-lang3-3.20.0" level="project" />
     <orderEntry type="library" name="postgresql-42.7.2" level="project" />
     <orderEntry type="library" name="junit.jupiter" level="project" />
+    <orderEntry type="library" name="mockito.core" level="project" />
   </component>
 </module>

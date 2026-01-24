@@ -1,4 +1,1 @@
-Player20:1025
-57115:1000
-Player49:1000
-Player24:975
+player2:0

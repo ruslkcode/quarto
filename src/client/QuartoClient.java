@@ -5,8 +5,9 @@ import java.io.*;
 import java.net.Socket;
 
 /**
- * Handles network communication with the Quarto Server.
- * Parses incoming messages and notifies the TUI via the GameListener interface.
+ * Network client for communicating with the Quarto server.
+ * The client runs a dedicated listener thread that processes
+ * incoming messages asynchronously.
  */
 public class QuartoClient {
 
@@ -16,18 +17,72 @@ public class QuartoClient {
     private GameListener listener;
     private volatile boolean running = false;
 
+    /*@
+      private invariant running ==> socket != null;
+    @*/
+
     /**
-     * Listener interface used by the TUI.
+     * Callback interface implemented by the TUI.
+     * Used to notify the UI about server events.
      */
     public interface GameListener {
+
+        /** Called once the client successfully connects to the server. */
         void onConnected();
+
+        /**
+         * Called when the server starts a new game.
+         *
+         * @param p1 name of player 1
+         * @param p2 name of player 2
+         */
         void onNewGame(String p1, String p2);
+
+        /**
+         * Called when a move is received.
+         *
+         * @param location board index (or -1 if no placement)
+         * @param piece next piece id
+         */
         void onOpponentMove(int location, int piece);
+
+        /**
+         * Called when the game ends.
+         *
+         * @param result game result (VICTORY / DRAW)
+         * @param winner winner name (empty if draw)
+         */
         void onGameOver(String result, String winner);
+
+        /**
+         * Called when a protocol or connection error occurs.
+         *
+         * @param msg error message
+         */
         void onError(String msg);
+
+        /**
+         * Called when a chat message is received.
+         *
+         * @param sender sender name
+         * @param text message text
+         */
         void onChat(String sender, String text);
     }
 
+    /**
+     * Connects to the Quarto server and starts the listener thread.
+     *
+     * @param host server hostname
+     * @param port server port
+     * @param listener UI listener for callbacks
+     * @throws IOException if the connection fails
+     */
+    /*@
+      requires host != null;
+      requires port > 0;
+      ensures running;
+    @*/
     public void connect(String host, int port, GameListener listener) throws IOException {
         this.socket = new Socket(host, port);
         this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
@@ -43,7 +98,8 @@ public class QuartoClient {
     }
 
     /**
-     * Main network listening loop.
+     * Main loop that listens for incoming messages from the server.
+     * Runs in a dedicated background thread.
      */
     private void listen() {
         try {
@@ -93,7 +149,6 @@ public class QuartoClient {
                     case Protocol.ERROR -> {
                         String errorMsg = parts.length > 1 ? parts[1] : "Unknown error";
                         listener.onError(errorMsg);
-
                         shutdown();
                         return;
                     }
@@ -108,36 +163,69 @@ public class QuartoClient {
         }
     }
 
-    // ================== Sending ==================
-
+    /**
+     * Sends a LOGIN command to the server.
+     *
+     * @param username chosen username
+     */
+    /*@
+      requires username != null;
+      requires running;
+    @*/
     public void login(String username) {
         send(Protocol.LOGIN + Protocol.SEPARATOR + username);
     }
 
+    /**
+     * Sends a QUEUE command to the server.
+     * Places the client into the matchmaking queue.
+     */
+    /*@
+      requires running;
+    @*/
     public void queue() {
         send(Protocol.QUEUE);
     }
 
+    /**
+     * Sends a MOVE command to the server.
+     *
+     * @param location board index, or -1 if no placement
+     * @param nextPiece next piece id
+     */
+    /*@
+      requires running;
+    @*/
     public void sendMove(int location, int nextPiece) {
         if (!running) return;
 
         if (location == -1) {
             send(Protocol.MOVE + Protocol.SEPARATOR + nextPiece);
         } else {
-            send(Protocol.MOVE + Protocol.SEPARATOR + location + Protocol.SEPARATOR + nextPiece);
+            send(Protocol.MOVE + Protocol.SEPARATOR + location
+                         + Protocol.SEPARATOR + nextPiece);
         }
     }
 
+    /**
+     * Requests a list of currently connected players.
+     */
+    /*@
+      requires running;
+    @*/
     public void listPlayers() {
         send(Protocol.LIST);
     }
 
+    /**
+     * Closes the client connection.
+     */
     public void close() {
         shutdown();
     }
 
     /**
-     * Sends a message to the server if the connection is still alive.
+     * Sends a raw protocol message to the server.
      */
     private synchronized void send(String msg) {
         if (!running) return;
@@ -152,7 +240,7 @@ public class QuartoClient {
     }
 
     /**
-     * Gracefully shuts down the client and releases resources.
+     * Gracefully shuts down the client and releases all resources.
      */
     private synchronized void shutdown() {
         if (!running) return;
@@ -165,6 +253,7 @@ public class QuartoClient {
 
     /**
      * Handles unrecoverable protocol errors.
+     * @param message error description
      */
     private void handleFatalError(String message) {
         if (listener != null) {

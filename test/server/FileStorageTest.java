@@ -50,5 +50,12 @@ public class FileStorageTest {
         assertTrue(rankings.contains("Alice"));
         assertTrue(rankings.contains("Bob"));
     }
+
+    @Test
+    void testLoadDoesNotThrow() {
+        // load() should not crash even if file exists or is empty
+        assertDoesNotThrow(() -> storage.load());
+    }
+
 }
 

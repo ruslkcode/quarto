@@ -154,4 +154,11 @@ public class GameServerTest {
 
         assertDoesNotThrow(() -> server.endSession(p1, p2));
     }
+
+    @Test
+    void testGetUserListEmpty() {
+        // Empty server should return empty user list
+        assertEquals("", server.getUserList());
+    }
+
 }

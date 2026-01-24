@@ -123,5 +123,22 @@ public class GameSessionTest {
         session.startGame();
         assertDoesNotThrow(() -> session.disconnect(player1));
     }
+
+    @Test
+    void testStartGameSetsPlayerIds() {
+        // startGame should assign player IDs
+        session.startGame();
+        assertEquals(1, player1.getPlayerID());
+        assertEquals(2, player2.getPlayerID());
+    }
+
+    @Test
+    void testHandleMoveInvalidLocation() {
+        // Invalid move location should not crash the session
+        session.startGame();
+        assertDoesNotThrow(() ->
+                                   session.handleMove(player1, 0, 99)
+        );
+    }
 }
 

@@ -51,7 +51,7 @@ public class QuartoTUI implements QuartoClient.GameListener {
         Arrays.fill(visualBoard, -1);
 
         System.out.println("╔════════════════════════════╗");
-        System.out.println("║    QUARTO CLIENT (STABLE)  ║");
+        System.out.println("║       QUARTO CLIENT        ║");
         System.out.println("╚════════════════════════════╝");
 
         System.out.print("Enter Username: ");

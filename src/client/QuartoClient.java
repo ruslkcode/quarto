@@ -133,7 +133,30 @@ public class QuartoClient {
                             handleFatalError("Malformed MOVE message");
                         }
                     }
+                    case Protocol.RANK -> {
+                        // Сервер прислал: RANK~User1~100~User2~50
+                        // parts[0] = "RANK"
+                        // parts[1] = "User1", parts[2] = "100" и т.д.
 
+                        StringBuilder sb = new StringBuilder();
+                        sb.append("\n SERVER RANKINGS \n");
+                        sb.append("---------------------\n");
+
+                        if (parts.length > 1) {
+                            for (int i = 1; i < parts.length; i += 2) {
+                                String name = parts[i];
+                                String score = (i + 1 < parts.length) ? parts[i + 1] : "0";
+                                sb.append(String.format("%-15s : %s\n", name, score));
+                            }
+                        } else {
+                            sb.append("No rankings available yet.\n");
+                        }
+
+                        // Самый простой способ вывести это в TUI — использовать механизм чата
+                        // или добавить отдельный метод в интерфейс.
+                        // Для быстроты используем onChat, так как он просто выводит текст.
+                        listener.onChat("SYSTEM", sb.toString());
+                    }
                     case Protocol.GAMEOVER -> {
                         String result = parts.length > 1 ? parts[1] : Protocol.DRAW;
                         String winner = parts.length > 2 ? parts[2] : "";
@@ -163,6 +186,10 @@ public class QuartoClient {
         }
     }
 
+    public void rankList(){
+        send(Protocol.RANK);
+    }
+
     /**
      * Sends a LOGIN command to the server.
      *
@@ -184,6 +211,8 @@ public class QuartoClient {
       requires running;
     @*/
     public void queue() {
+
+        System.out.println("You are added to queue");
         send(Protocol.QUEUE);
     }
 

@@ -1,1 +1,14 @@
+Player51:1025
+Player95:975
+Player80:975
 player2:0
+Player71:1025
+Player18:975
+Player15:1000
+Player59:975
+Player14:975
+Player58:1000
+Player27:1025
+Player11:975
+Player21:1025
+Player4:1050

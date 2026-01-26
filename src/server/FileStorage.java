@@ -23,7 +23,7 @@ public class FileStorage {
     /**
      * Initializes the file storage and loads existing ratings from file.
      */
-    public void FileStorage(){
+    public FileStorage(){
         load();
     }
 
@@ -148,7 +148,6 @@ public class FileStorage {
                     .append(entry.getValue());
         }
 
-        // Example result: "~Alice~1200~Bob~1000"
         return sb.toString();
     }
 }

@@ -133,8 +133,8 @@ public class GameServer extends SocketServer {
     public synchronized void checkQueue() {
 
         if (waitingPlayers.size() >= 2) {
-            ClientHandler p1 = waitingPlayers.remove(0);
-            ClientHandler p2 = waitingPlayers.remove(0);
+            ClientHandler p1 = waitingPlayers.removeFirst();
+            ClientHandler p2 = waitingPlayers.removeFirst();
 
             GameSession session = new GameSession(p1, p2, nextGameId++);
             activeSessions.put(p1, session);

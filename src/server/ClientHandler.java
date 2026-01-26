@@ -169,6 +169,7 @@ public class ClientHandler extends SocketConnection {
                         sendPacket(Protocol.ERROR + Protocol.SEPARATOR + "YOU HAVE TO LOGIN");
                         return;
                     }
+                    System.out.println(this.username + " added to queue");
                     server.addToQueue(this);
                     break;
 
@@ -207,7 +208,7 @@ public class ClientHandler extends SocketConnection {
             }
 
         } catch (Exception e) {
-            e.printStackTrace();
+            e.getMessage();
         }
     }
 

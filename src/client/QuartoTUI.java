@@ -10,11 +10,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 /**
- * Text User Interface (Final Fix).
- * Solves:
- * 1. Server Echo interpreting own moves as opponent's.
- * 2. Board visibility on first turn.
- * 3. AI infinite loop / spam.
+ * Text-based User Interface for the Quarto client.
  */
 public class QuartoTUI implements QuartoClient.GameListener {
 
@@ -24,13 +20,21 @@ public class QuartoTUI implements QuartoClient.GameListener {
     private String username;
     private Scanner scanner;
 
-    // Game State
+    /** Local visual representation of the board (indices 0–15). */
     private int[] visualBoard = new int[16];
-    private int pieceInHand = -1; // Piece we must place
+
+    /** Piece currently held by this player (-1 if none). */
+    private int pieceInHand = -1;
+
     private boolean isAiMode = false;
     private boolean isGameActive = false;
 
-    // TURN LOGIC (CRITICAL FIXES)
+    /**
+     * Turn-handling flags.
+     *
+     * <p>{@code isMyTurn} — indicates whether this client may perform a move.</p>
+     * <p>{@code waitingForServerEcho} — prevents double input until server confirms move.</p>
+     */
     private volatile boolean isMyTurn = false;
     private volatile boolean waitingForServerEcho = false;
 
@@ -38,6 +42,9 @@ public class QuartoTUI implements QuartoClient.GameListener {
         new QuartoTUI().start();
     }
 
+    /**
+     * Initializes the client, asks for configuration, and connects to the server.
+     */
     public void start() {
         scanner = new Scanner(System.in);
         client = new QuartoClient();
@@ -70,7 +77,7 @@ public class QuartoTUI implements QuartoClient.GameListener {
         try {
             String input = scanner.nextLine();
             if (!input.isBlank()) port = Integer.parseInt(input);
-        } catch (Exception e) {}
+        } catch (Exception ignored) {}
 
         try {
             client.connect("localhost", port, this);
@@ -80,8 +87,11 @@ public class QuartoTUI implements QuartoClient.GameListener {
                 System.out.println("🤖 Bot started. Auto-queueing...");
                 Thread.sleep(500);
                 client.queue();
-                // Bot keeps main thread alive
-                while(true) { Thread.sleep(1000); }
+
+                // Keep AI client alive
+                while (true) {
+                    Thread.sleep(1000);
+                }
             } else {
                 mainInputLoop();
             }
@@ -91,6 +101,9 @@ public class QuartoTUI implements QuartoClient.GameListener {
         }
     }
 
+    /**
+     * Configures AI strategy and initializes the AI client.
+     */
     private void setupAI() {
         System.out.println("Select AI Strategy:");
         System.out.println("1. Naive (Random)");
@@ -102,14 +115,15 @@ public class QuartoTUI implements QuartoClient.GameListener {
         if (choice.equals("2")) strategy = new SmartStrategy();
         else strategy = new NaiveStrategy();
 
-        // Give AI 1 second delay to feel like a real player
+        // Small delay to make AI behavior feel human-like
         aiClient = new AIClient(username, strategy, 1000);
         System.out.println("✅ AI Configured: " + strategy.getName());
     }
 
-    // ==========================================
-    // HUMAN INPUT LOOP
-    // ==========================================
+    /**
+     * Main input loop for human players.
+     * Processes commands and move input depending on game state.
+     */
     private void mainInputLoop() {
         System.out.println("\n--- MAIN MENU ---");
         System.out.println("Commands: queue | rank | quit ");
@@ -118,7 +132,7 @@ public class QuartoTUI implements QuartoClient.GameListener {
             String line = scanner.nextLine().trim();
             if (line.isEmpty()) continue;
 
-            // Only process moves if it's OUR turn and we are NOT waiting for server confirmation
+            // Only allow move input if it is our turn
             if (isGameActive && isMyTurn && !waitingForServerEcho) {
                 processHumanMoveInput(line);
                 continue;
@@ -128,13 +142,17 @@ public class QuartoTUI implements QuartoClient.GameListener {
             switch (cmd) {
                 case "queue": client.queue(); break;
                 case "list": client.listPlayers(); break;
-                //case "chat": client.sendChat(line.substring(4).trim()); break;
                 case "rank": client.rankList(); break;
-                case "quit": client.close(); System.exit(0); break;
+                case "quit":
+                    client.close();
+                    System.exit(0);
+                    break;
                 default:
                     if (isGameActive) {
-                        if (waitingForServerEcho) System.out.println("⚠️ Waiting for server confirmation...");
-                        else System.out.println("⚠️ Not your turn! Opponent is thinking.");
+                        if (waitingForServerEcho)
+                            System.out.println("⚠️ Waiting for server confirmation...");
+                        else
+                            System.out.println("⚠️ Not your turn! Opponent is thinking.");
                     } else {
                         System.out.println("Unknown command.");
                     }
@@ -142,17 +160,21 @@ public class QuartoTUI implements QuartoClient.GameListener {
         }
     }
 
+    /**
+     * Parses and validates move input from a human player.
+     *
+     * @param line raw input line
+     */
     private void processHumanMoveInput(String line) {
         try {
             String[] parts = line.split("\\s+");
 
-            // Сценарий 1: Первый ход (только даем фигуру)
-            // Тут победить нельзя, поэтому оставляем как есть
             if (pieceInHand == -1) {
                 if (parts.length != 1) {
                     System.out.println("❌ Invalid format. Enter: <PIECE_TO_GIVE>");
                     return;
                 }
+
                 int pieceToGive = Integer.parseInt(parts[0]);
                 if (!isValidPiece(pieceToGive)) {
                     System.out.println("❌ Invalid Piece ID (must be available).");
@@ -165,8 +187,6 @@ public class QuartoTUI implements QuartoClient.GameListener {
                 return;
             }
 
-            // Сценарий 2: Обычный ход (Поставить + Дать/Заявить победу)
-            // ВОТ ТУТ МЕНЯЕМ ЛОГИКУ
             if (parts.length != 2) {
                 System.out.println("❌ Format: <LOCATION> <PIECE_TO_GIVE>");
                 System.out.println("   Or: <LOCATION> 16 (for Victory)");
@@ -174,24 +194,21 @@ public class QuartoTUI implements QuartoClient.GameListener {
             }
 
             int loc = Integer.parseInt(parts[0]);
-            int code = Integer.parseInt(parts[1]); // Это может быть фигура ИЛИ код 16/17
+            int code = Integer.parseInt(parts[1]); // Piece ID or special code
 
-            // 1. Проверяем место на доске (оно должно быть свободным и валидным)
+            // Validate board location
             if (loc < 0 || loc > 15 || visualBoard[loc] != -1) {
                 System.out.println("❌ Invalid Location.");
                 return;
             }
 
-            // 2. Проверяем второй параметр
-            // Разрешаем, если это спец-код (16/17) ИЛИ если это валидная фигура
+            // Allow special protocol codes or valid pieces
             boolean isSpecialCode = (code == 16 || code == 17);
-
             if (!isSpecialCode && !isValidPiece(code)) {
                 System.out.println("❌ Invalid Piece ID or Code.");
                 return;
             }
 
-            // Отправляем
             client.sendMove(loc, code);
             waitingForServerEcho = true;
 
@@ -206,14 +223,13 @@ public class QuartoTUI implements QuartoClient.GameListener {
         }
     }
 
+    /**
+     * Checks whether a piece ID is valid and still available.
+     */
     private boolean isValidPiece(int id) {
         if (id < 0 || id > 15) return false;
         return localGame.getAvailablePieces().containsKey(id) && id != pieceInHand;
     }
-
-    // ==========================================
-    // NETWORK EVENTS
-    // ==========================================
 
     @Override
     public void onConnected() {
@@ -229,9 +245,10 @@ public class QuartoTUI implements QuartoClient.GameListener {
         isMyTurn = false;
         waitingForServerEcho = false;
 
-        if (!isAiMode) System.out.println("\n🟢 NEW GAME STARTED: " + p1 + " vs " + p2);
+        if (!isAiMode)
+            System.out.println("\n🟢 NEW GAME STARTED: " + p1 + " vs " + p2);
 
-        // ALWAYS draw board on start so P2 can see grid
+        // Always draw the board so Player 2 sees the grid immediately
         if (!isAiMode) drawBoard();
 
         if (p1.equals(username)) {
@@ -243,11 +260,14 @@ public class QuartoTUI implements QuartoClient.GameListener {
                 System.out.println("✍️  Enter: <PIECE_TO_GIVE>");
             }
         } else {
-            if (!isAiMode) System.out.println("⏳ Opponent's turn to pick the first piece...");
+            if (!isAiMode)
+                System.out.println("⏳ Opponent's turn to pick the first piece...");
         }
     }
 
-    // This handles BOTH Opponent moves AND our own echoed moves
+    /**
+     * Handles both opponent moves and echoed confirmations of our own moves.
+     */
     @Override
     public void onOpponentMove(int location, int piece) {
         if (localGame == null) return;
@@ -255,7 +275,6 @@ public class QuartoTUI implements QuartoClient.GameListener {
         try {
             int placedPiece = -1;
 
-            // Apply logic update
             if (location == -1) {
                 localGame.doMove(new Move(piece));
             } else {
@@ -264,27 +283,28 @@ public class QuartoTUI implements QuartoClient.GameListener {
                 visualBoard[location] = placedPiece;
             }
 
-            // Logic to distinguish WHO made the move
             if (waitingForServerEcho) {
-                // It was MY move echoing back
-                waitingForServerEcho = false; // Unlock
-                isMyTurn = false;             // My turn is over
+                // Our own move confirmed by the server
+                waitingForServerEcho = false;
+                isMyTurn = false;
+
                 if (!isAiMode) {
-                    drawBoard(); // Redraw with my move
+                    drawBoard();
                     System.out.println("✅ Move accepted. Opponent is thinking...");
                 }
             } else {
-                // It was OPPONENT'S move
-                pieceInHand = piece; // Now I hold this piece
-                isMyTurn = true;     // Now it's my turn
+                // Opponent move received
+                pieceInHand = piece;
+                isMyTurn = true;
 
                 if (!isAiMode) {
                     if (location == -1) {
                         System.out.println("🔻 Opponent gave you piece: [" + piece + "]");
                     } else {
-                        System.out.println("🔻 Opponent placed [" + placedPiece + "] at " + location + " and gave [" + piece + "]");
+                        System.out.println("🔻 Opponent placed [" + placedPiece +
+                                                   "] at " + location + " and gave [" + piece + "]");
                     }
-                    drawBoard(); // Redraw with opponent move
+                    drawBoard();
 
                     if (!localGame.isGameOver()) {
                         System.out.println("✋ YOU HAVE: [" + pieceInHand + "]");
@@ -292,7 +312,6 @@ public class QuartoTUI implements QuartoClient.GameListener {
                     }
                 }
 
-                // If AI, trigger response
                 if (isAiMode && isGameActive) {
                     makeAiMove();
                 }
@@ -303,6 +322,9 @@ public class QuartoTUI implements QuartoClient.GameListener {
         }
     }
 
+    /**
+     * Triggers AI move calculation and submission.
+     */
     private void makeAiMove() {
         if (waitingForServerEcho) return;
 
@@ -312,12 +334,13 @@ public class QuartoTUI implements QuartoClient.GameListener {
                 Move move = aiClient.determineMove(localGame);
                 if (move == null) return;
 
-                // Send and set wait flag
                 client.sendMove(move.getLocation(), move.getNextPiece());
                 waitingForServerEcho = true;
                 System.out.println("🤖 Bot moved.");
 
-            } catch (Exception e) { e.printStackTrace(); }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }).start();
     }
 
@@ -328,8 +351,10 @@ public class QuartoTUI implements QuartoClient.GameListener {
         waitingForServerEcho = false;
 
         if (result.equals(Protocol.VICTORY)) {
-            if (winner.equals(username)) System.out.println("\n🏆 VICTORY! You won!");
-            else System.out.println("\n💀 DEFEAT. Winner: " + winner);
+            if (winner.equals(username))
+                System.out.println("\n🏆 VICTORY! You won!");
+            else
+                System.out.println("\n💀 DEFEAT. Winner: " + winner);
         } else {
             System.out.println("\n🤝 DRAW GAME.");
         }
@@ -337,7 +362,7 @@ public class QuartoTUI implements QuartoClient.GameListener {
         localGame = null;
 
         if (isAiMode) {
-            try { Thread.sleep(2000); } catch (Exception e) {}
+            try { Thread.sleep(2000); } catch (Exception ignored) {}
             System.out.println("🤖 Bot re-queueing...");
             client.queue();
         } else {
@@ -348,33 +373,42 @@ public class QuartoTUI implements QuartoClient.GameListener {
     @Override
     public void onError(String msg) {
         System.out.println("⚠️ SERVER ERROR: " + msg);
-        // If error happens during move, unlock
         waitingForServerEcho = false;
     }
 
     @Override
     public void onChat(String sender, String text) {
-        if (!isAiMode) System.out.println("💬 " + sender + ": " + text);
+        if (!isAiMode)
+            System.out.println("💬 " + sender + ": " + text);
     }
 
+    /**
+     * Draws the current board state and available pieces.
+     */
     private void drawBoard() {
         System.out.println("\n      0     1     2     3");
         System.out.println("   ╔═════╦═════╦═════╦═════╗");
+
         for (int row = 0; row < 4; row++) {
             System.out.print("   ║");
             for (int col = 0; col < 4; col++) {
                 int index = row * 4 + col;
                 int val = visualBoard[index];
-                if (val == -1) System.out.printf(" %3d ║", index);
-                else System.out.printf(" \u001B[1m[%2d]\u001B[0m║", val);
+                if (val == -1)
+                    System.out.printf(" %3d ║", index);
+                else
+                    System.out.printf(" \u001B[1m[%2d]\u001B[0m║", val);
             }
             System.out.println();
-            if (row < 3) System.out.println("   ╠═════╬═════╬═════╬═════╣");
-            else System.out.println("   ╚═════╩═════╩═════╩═════╝");
+            if (row < 3)
+                System.out.println("   ╠═════╬═════╬═════╬═════╣");
+            else
+                System.out.println("   ╚═════╩═════╩═════╩═════╝");
         }
 
         if (localGame != null) {
-            Set<Integer> available = new TreeSet<>(localGame.getAvailablePieces().keySet());
+            Set<Integer> available =
+                    new TreeSet<>(localGame.getAvailablePieces().keySet());
             if (pieceInHand != -1) available.remove(pieceInHand);
 
             System.out.println("\n📦 AVAILABLE PIECES (Legend: Height, Color, Shape, Fill):");
@@ -387,19 +421,24 @@ public class QuartoTUI implements QuartoClient.GameListener {
                 count++;
                 if (count % 4 == 0) System.out.println();
             }
-            System.out.println("\n");
+            System.out.println();
         }
     }
 
+    /**
+     * Returns a compact textual representation of a piece's attributes.
+     */
     private String getPieceStats(int id) {
         boolean isTall   = (id & 8) != 0;
         boolean isBlack  = (id & 4) != 0;
         boolean isSquare = (id & 2) != 0;
         boolean isSolid  = (id & 1) != 0;
+
         String h = isTall   ? "T" : "s";
         String c = isBlack  ? "B" : "W";
         String s = isSquare ? "Q" : "O";
         String f = isSolid  ? "*" : "_";
+
         return String.format("%s%s%s%s", h, c, s, f);
     }
 }

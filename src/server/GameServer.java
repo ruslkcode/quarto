@@ -284,11 +284,27 @@ public class GameServer extends SocketServer {
      */
     public static void main(String[] args) throws IOException {
         Scanner input = new Scanner(System.in);
-        System.out.println("Enter the port number (0 for random): ");
-        String s = input.nextLine();
-        int port = Integer.parseInt(s);
+        System.out.println("Enter the port number (Enter for random): ");
+        String s = input.nextLine().trim();
+
+        int port = 0;
+
+        try {
+            if (!s.isEmpty()) {
+                port = Integer.parseInt(s);
+            }
+        } catch (NumberFormatException e) {
+            System.out.println("Invalid number! Using random port by default.");
+            port = 0;
+        }
+
         GameServer server = new GameServer(port);
-        System.out.println("Server is on port: " + server.getPort());
+        System.out.println("Server started!");
+        System.out.println("Listening on port: " + server.getPort());
+        try {
+            System.out.println("Your Local IP: " + java.net.InetAddress.getLocalHost().getHostAddress());
+        } catch (Exception ignored) {}
+
         server.acceptConnections();
     }
 }

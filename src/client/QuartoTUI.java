@@ -71,6 +71,11 @@ public class QuartoTUI implements QuartoClient.GameListener {
             isAiMode = false;
             System.out.println("✅ Mode: HUMAN");
         }
+        System.out.print("Server Host (Enter for localhost): ");
+        String host = scanner.nextLine().trim();
+        if (host.isEmpty()) {
+            host = "localhost";
+        }
 
         System.out.print("Server Port (Enter for 5432): ");
         int port = 5432;
@@ -80,7 +85,7 @@ public class QuartoTUI implements QuartoClient.GameListener {
         } catch (Exception ignored) {}
 
         try {
-            client.connect("localhost", port, this);
+            client.connect(host, port, this);
             client.send("HELLO~reference");
             client.login(username);
 

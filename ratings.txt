@@ -1,6 +1,7 @@
 Player51:1025
 Player95:975
 REFERENCE_0:150
+fdvdfbv:1125
 REFERENCE_1:3950
 REFERENCE_2:775
 REFERENCE_3:1175
@@ -18,6 +19,7 @@ player1:1150
 player2:0
 Alice:1600
 Player18:975
+gdsvds:875
 Player15:1000
 Player59:975
 Player14:975

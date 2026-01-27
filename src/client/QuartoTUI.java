@@ -327,11 +327,24 @@ public class QuartoTUI implements QuartoClient.GameListener {
      * Triggers AI move calculation and submission.
      */
     private void makeAiMove() {
+
+        if (!isAiMode) return;
+        if (!isGameActive) return;
+        if (!isMyTurn) return;
         if (waitingForServerEcho) return;
+        if (localGame == null) return;
 
         new Thread(() -> {
             try {
+                // Small thinking delay
                 Thread.sleep(100);
+
+                // Re-check EVERYTHING after delay (critical!)
+                if (!isGameActive) return;
+                if (!isMyTurn) return;
+                if (waitingForServerEcho) return;
+                if (localGame == null) return;
+
                 Move move = aiClient.determineMove(localGame);
                 if (move == null) return;
 
@@ -339,10 +352,13 @@ public class QuartoTUI implements QuartoClient.GameListener {
                 waitingForServerEcho = true;
                 System.out.println("🤖 Bot moved.");
 
+            } catch (InterruptedException ignored) {
+                // Thread interrupted → silently exit
             } catch (Exception e) {
-                e.printStackTrace();
+                // AI should never crash the client
+                System.err.println("⚠️ AI move failed: " + e.getMessage());
             }
-        }).start();
+        }, "AI-Move-Thread").start();
     }
 
     @Override
@@ -363,7 +379,7 @@ public class QuartoTUI implements QuartoClient.GameListener {
         localGame = null;
 
         if (isAiMode) {
-            try { Thread.sleep(2000); } catch (Exception ignored) {}
+            try { Thread.sleep(1000); } catch (Exception ignored) {}
             System.out.println("🤖 Bot re-queueing...");
             client.queue();
         } else {

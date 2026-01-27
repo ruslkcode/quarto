@@ -37,10 +37,10 @@ public class NaiveStrategy implements BotStrategy {
         List<Move> moves = getValidMoves(game);
 
         // No legal moves → game must be finished
-        if (moves.isEmpty()) {
+        if (moves.size() == 1) {
             return game.getWinner() != 0
-                    ? new Move(16)
-                    : new Move(17);
+                    ? new Move(16, moves.get(0).getLocation())
+                    : new Move(17, moves.get(0).getLocation());
         }
 
         // Check for immediate win or draw

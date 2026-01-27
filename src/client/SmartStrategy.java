@@ -27,16 +27,39 @@ public class SmartStrategy implements BotStrategy{
     @Override
     public Move determineMove(Game game) {
 
-        // Immediate win
-        Move win = findImmediateWin(game);
-        if (win != null) {
-            return win;
+        // Generate all moves
+        List<Move> moves = getValidMoves(game);
+
+        // LAST MOVE: must declare victory or draw
+        if (moves.size() == 1) {
+            return game.getWinner() != 0
+                    ? new Move(16, moves.get(0).getLocation())
+                    : new Move(17, moves.get(0).getLocation());
+        }
+
+        // Check for immediate win or draw
+        for (Move move : moves) {
+            Game copy = game.deepCopy();
+            copy.doMove(move);
+
+            // In our model, after doMove the currentPlayer has already switched.
+            // Any non-zero winner means the move finished the game in our favour,
+            // so we must claim victory with code 16.
+            if (copy.getWinner() != 0) {
+                return move.isFirstMove()
+                        ? new Move(16)
+                        : new Move(16, move.getLocation());
+            }
+
+            // Draw detection remains based on the Game API.
+            if (copy.isDraw()) {
+                return move.isFirstMove()
+                        ? new Move(17)
+                        : new Move(17, move.getLocation());
+            }
         }
 
         List<int[]> lines = getAllLines();
-
-        // Generate all moves
-        List<Move> moves = getValidMoves(game);
 
         //  Defensive filters
         moves = filterImmediateLoss(game, moves);
@@ -44,29 +67,10 @@ public class SmartStrategy implements BotStrategy{
         moves = filterAntiFork(game, moves, lines);
 
         // Safety fallback
-        if (moves.isEmpty()) {
-            if (game.getWinner() != 0) {
-                return new Move(16);
-            }
-
-            return new Move(17);
-        }
-
-
         if (moves.size() == 1) {
             return moves.get(0);
         }
 
-        for (Move move : moves) {
-            Game copy = game.deepCopy();
-            copy.doMove(move);
-            if (copy.isDraw()) {
-                if (move.isFirstMove()) {
-                    return new Move(17);
-                }
-                return new Move(17, move.getLocation());
-            }
-        }
 
         // Evaluation
         Move bestMove = null;
@@ -96,58 +100,27 @@ public class SmartStrategy implements BotStrategy{
     List<Move> getValidMoves(Game game) {
         List<Move> result = new ArrayList<>();
         Map<Integer, Piece> pieces = game.getAvailablePieces();
-        if (game.getCurrentPieceID() == -1) { //Filling the result with only pieces if it is the first move.
+
+        // FIRST MOVE: only give a piece
+        if (game.getCurrentPieceID() == -1) {
             for (int key : pieces.keySet()) {
                 result.add(new Move(key));
             }
             return result;
         }
 
-        for (int i = 0; i < 16; i++) { // For all other moves puts a combination of field id and piece id.
-            if (game.getBoard().isEmptyField(i)) {
-                for (int key : pieces.keySet()) {
-                    Move move = new Move(key, i);
-                    result.add(move);
-                }
+        // NORMAL MOVE (placement + give next piece)
+        for (int i = 0; i < 16; i++) {
+            if (!game.getBoard().isEmptyField(i)) continue;
+
+            for (int key : pieces.keySet()) {
+                result.add(new Move(key, i));
             }
         }
+
         return result;
     }
 
-
-    /**
-     * Finds the move that wins the game immediately, or null if no such move exists.
-     * @param game the current game.
-     * @return the move that wins or null.
-     */
-
-    /*@
-        requires game != null;
-    @*/
-
-    /**
-     * Finds a move that wins the game immediately.
-     * If such a move exists, the returned move encodes victory
-     * by using piece id 16.
-     *
-     * @param game current game state
-     * @return winning move, or null if none exists
-     */
-    /*@
-    requires game != null;
-    @*/
-    public Move findImmediateWin(Game game) {
-        for (Move move : getValidMoves(game)) {
-            Game copy = game.deepCopy();
-            copy.doMove(move);
-            if (copy.getWinner() == game.getCurrentPlayer()) {
-                return move.isFirstMove()
-                        ? new Move(16)
-                        : new Move(16, move.getLocation());
-            }
-        }
-        return null;
-    }
 
     /**
      * Filters moves in terms of getting rid of moves that immediately lead to loss.
@@ -260,11 +233,11 @@ public class SmartStrategy implements BotStrategy{
 
         int score = 0;
 
-        // Win / loss
+        // If this move results in a winning board, treat it as a
+        // very large positive score. After doMove we are always
+        // evaluating from the perspective of the player who just moved.
         if (game.getWinner() != 0) {
-            return (game.getWinner() == game.getCurrentPlayer())
-                    ? -100000   // opponent just won
-                    : 100000;   // we just won
+            return 100000;
         }
 
         // Dangerous lines

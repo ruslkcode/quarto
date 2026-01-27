@@ -256,7 +256,7 @@ public class QuartoClient {
     /**
      * Sends a raw protocol message to the server.
      */
-    private synchronized void send(String msg) {
+    public synchronized void send(String msg) {
         if (!running) return;
 
         try {

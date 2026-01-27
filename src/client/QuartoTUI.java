@@ -81,6 +81,7 @@ public class QuartoTUI implements QuartoClient.GameListener {
 
         try {
             client.connect("localhost", port, this);
+            client.send("HELLO~reference");
             client.login(username);
 
             if (isAiMode) {
@@ -330,7 +331,7 @@ public class QuartoTUI implements QuartoClient.GameListener {
 
         new Thread(() -> {
             try {
-                Thread.sleep(1000);
+                Thread.sleep(100);
                 Move move = aiClient.determineMove(localGame);
                 if (move == null) return;
 

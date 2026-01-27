@@ -134,9 +134,6 @@ public class QuartoClient {
                         }
                     }
                     case Protocol.RANK -> {
-                        // Сервер прислал: RANK~User1~100~User2~50
-                        // parts[0] = "RANK"
-                        // parts[1] = "User1", parts[2] = "100" и т.д.
 
                         StringBuilder sb = new StringBuilder();
                         sb.append("\n SERVER RANKINGS \n");

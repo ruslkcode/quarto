@@ -14,5 +14,6 @@
     <orderEntry type="library" name="mockito.core" level="project" />
     <orderEntry type="library" name="javafx-sdk-25.0" level="project" />
     <orderEntry type="library" name="lib" level="project" />
+    <orderEntry type="library" name="openjfx.javafx.controls" level="project" />
   </component>
 </module>

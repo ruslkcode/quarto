@@ -16,9 +16,9 @@ import java.util.Scanner;
  * <p>
  * It maintains:
  * <ul>
- *   <li>a list of connected clients</li>
- *   <li>a matchmaking queue</li>
- *   <li>active game sessions</li>
+ * <li>a list of connected clients</li>
+ * <li>a matchmaking queue</li>
+ * <li>active game sessions</li>
  * </ul>
  */
 public class GameServer extends SocketServer {
@@ -33,12 +33,19 @@ public class GameServer extends SocketServer {
 
     private int nextGameId = 1;
 
-    /*@
-      @ private invariant clients != null;
-      @ private invariant waitingPlayers != null;
-      @ private invariant activeSessions != null;
-      @ private invariant nextGameId > 0;
-      @*/
+    /*
+     * @
+     * 
+     * @ private invariant clients != null;
+     * 
+     * @ private invariant waitingPlayers != null;
+     * 
+     * @ private invariant activeSessions != null;
+     * 
+     * @ private invariant nextGameId > 0;
+     * 
+     * @
+     */
 
     /**
      * Creates a new GameServer instance on the given port.
@@ -71,13 +78,17 @@ public class GameServer extends SocketServer {
      * Handles a move sent by a player.
      * If the player is not in an active session, an error is sent.
      *
-     * @param player the player making the move
+     * @param player    the player making the move
      * @param nextPiece the next piece chosen
-     * @param location the board location
+     * @param location  the board location
      */
-    /*@
-      @ requires player != null;
-      @*/
+    /*
+     * @
+     * 
+     * @ requires player != null;
+     * 
+     * @
+     */
     public synchronized void handleMove(ClientHandler player, int nextPiece, int location) {
         if (!activeSessions.containsKey(player)) {
             player.sendPacket(Protocol.ERROR + Protocol.SEPARATOR + "Not in game");
@@ -109,9 +120,13 @@ public class GameServer extends SocketServer {
      *
      * @param player the player to add
      */
-    /*@
-      @ requires player != null;
-      @*/
+    /*
+     * @
+     * 
+     * @ requires player != null;
+     * 
+     * @
+     */
     public synchronized void addToQueue(ClientHandler player) {
         if (activeSessions.containsKey(player) || waitingPlayers.contains(player)) {
             player.sendPacket(Protocol.ERROR + Protocol.SEPARATOR + "Already in game or queue");
@@ -145,40 +160,40 @@ public class GameServer extends SocketServer {
             checkQueue();
         }
 
-
         // MMR GAME SEARCH
-        //        ClientHandler player1 = null;
-        //        ClientHandler player2 = null;
-        //        long currentTime = System.currentTimeMillis();
+        // ClientHandler player1 = null;
+        // ClientHandler player2 = null;
+        // long currentTime = System.currentTimeMillis();
         //
-        //        for (int i = 0; i < waitingPlayers.size(); i++) {
-        //            ClientHandler p1Candidate = waitingPlayers.get(i);
-        //            long waitTime = currentTime - p1Candidate.getQueueJoinTime();
-        //            int currentDiff = 500 + (int) ((waitTime / 20000) * 500);
+        // for (int i = 0; i < waitingPlayers.size(); i++) {
+        // ClientHandler p1Candidate = waitingPlayers.get(i);
+        // long waitTime = currentTime - p1Candidate.getQueueJoinTime();
+        // int currentDiff = 500 + (int) ((waitTime / 20000) * 500);
         //
-        //            for (int j = i + 1; j < waitingPlayers.size(); j++) {
-        //                ClientHandler p2Candidate = waitingPlayers.get(j);
+        // for (int j = i + 1; j < waitingPlayers.size(); j++) {
+        // ClientHandler p2Candidate = waitingPlayers.get(j);
         //
         //
-        //                if (Math.abs(storage.getMmr(p1Candidate.getUsername()) - storage.getMmr(p2Candidate.getUsername())) <= currentDiff) {
-        //                    player1 = p1Candidate;
-        //                    player2 = p2Candidate;
-        //                    break;
-        //                }
-        //            }
-        //            if (player1 != null && player2 != null) {
-        //                waitingPlayers.remove(player1);
-        //                waitingPlayers.remove(player2);
+        // if (Math.abs(storage.getMmr(p1Candidate.getUsername()) -
+        // storage.getMmr(p2Candidate.getUsername())) <= currentDiff) {
+        // player1 = p1Candidate;
+        // player2 = p2Candidate;
+        // break;
+        // }
+        // }
+        // if (player1 != null && player2 != null) {
+        // waitingPlayers.remove(player1);
+        // waitingPlayers.remove(player2);
         //
-        //                GameSession session = new GameSession(player1, player2, nextGameId++);
-        //                activeSessions.put(player1, session);
-        //                activeSessions.put(player2, session);
-        //                session.startGame();
+        // GameSession session = new GameSession(player1, player2, nextGameId++);
+        // activeSessions.put(player1, session);
+        // activeSessions.put(player2, session);
+        // session.startGame();
         //
-        //                checkQueue();
-        //                return;
-        //            }
-        //        }
+        // checkQueue();
+        // return;
+        // }
+        // }
     }
 
     /**
@@ -216,9 +231,13 @@ public class GameServer extends SocketServer {
      *
      * @param player the disconnected client
      */
-    /*@
-      @ requires player != null;
-      @*/
+    /*
+     * @
+     * 
+     * @ requires player != null;
+     * 
+     * @
+     */
     public synchronized void handleDisconnect(ClientHandler player) {
         if (waitingPlayers.remove(player)) {
             System.out.println(player.getUsername() + " removed from queue");
@@ -242,11 +261,17 @@ public class GameServer extends SocketServer {
      * @param player1 first player
      * @param player2 second player
      */
-    /*@
-      @ requires player1 != null && player2 != null;
-      @ ensures !activeSessions.containsKey(player1);
-      @ ensures !activeSessions.containsKey(player2);
-      @*/
+    /*
+     * @
+     * 
+     * @ requires player1 != null && player2 != null;
+     * 
+     * @ ensures !activeSessions.containsKey(player1);
+     * 
+     * @ ensures !activeSessions.containsKey(player2);
+     * 
+     * @
+     */
     public synchronized void endSession(ClientHandler player1, ClientHandler player2) {
         if (activeSessions.containsKey(player1)) {
             activeSessions.remove(player1);
@@ -254,7 +279,8 @@ public class GameServer extends SocketServer {
         if (activeSessions.containsKey(player2)) {
             activeSessions.remove(player2);
         }
-        System.out.println("Session ended. Players " + player1.getUsername() + " and " + player2.getUsername() + " are free.");
+        System.out.println(
+                "Session ended. Players " + player1.getUsername() + " and " + player2.getUsername() + " are free.");
     }
 
     /**
@@ -270,7 +296,7 @@ public class GameServer extends SocketServer {
      * Updates the MMR of a player.
      *
      * @param username player username
-     * @param points MMR points to add or remove
+     * @param points   MMR points to add or remove
      */
     public void updateMmr(String username, int points) {
         storage.updateMmr(username, points);
@@ -300,10 +326,12 @@ public class GameServer extends SocketServer {
 
         GameServer server = new GameServer(port);
         System.out.println("Server started!");
+        System.out.println("=== SERVER LOGIC UPDATED: Win Detection Fix Applied ==="); // Verification Log
         System.out.println("Listening on port: " + server.getPort());
         try {
             System.out.println("Your Local IP: " + java.net.InetAddress.getLocalHost().getHostAddress());
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
 
         server.acceptConnections();
     }

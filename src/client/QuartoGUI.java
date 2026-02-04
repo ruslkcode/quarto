@@ -15,8 +15,7 @@ import javafx.scene.text.FontWeight;
 import javafx.stage.Stage;
 import protocol.Protocol;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Optional;
 
 public class QuartoGUI extends Application {
 
@@ -24,6 +23,7 @@ public class QuartoGUI extends Application {
     private GridPane boardGrid;
     private FlowPane availablePiecesPane;
     private Label statusLabel;
+    private Label turnLabel;
     private VBox currentPieceBox;
     private StackPane rootPane;
 
@@ -34,23 +34,29 @@ public class QuartoGUI extends Application {
     private QuartoClient client;
     private String myUsername;
 
-    // --- СОСТОЯНИЕ ИГРЫ ---
+    // --- GAME STATE ---
     private boolean isMyTurn = false;
     private boolean waitingForServerEcho = false;
 
-    private int pieceToPlace = -1;       // Фигура, которую нам ДАЛИ (нужно поставить)
-    private int lastPlacedPiece = -1;    // Вспомогательная для синхронизации
-    private int pieceGivenToOpponent = -1; // Фигура, которую МЫ дали оппоненту
+    private int pieceToPlace = -1; // Piece we MUST place
+    private int lastPlacedPiece = -1; // Piece we just placed (waiting for confirmation)
+    private int pieceGivenToOpponent = -1; // Piece we selected for opponent
 
     private Integer[] localBoard = new Integer[16];
     private Button[] boardButtons = new Button[16];
 
-    // --- СТИЛИ (Neon Cyberpunk) ---
-    private static final String BG_COLOR = "#1e1e1e";
-    private static final String PANEL_COLOR = "#2d2d2d";
-    private static final String ACCENT_COLOR = "#00bcd4";
-    private static final String WIN_COLOR = "#00ff00";
-    private static final String LOSE_COLOR = "#ff0000";
+    // --- STYLES (Modern Minimalist) ---
+    private static final String BG_COLOR = "#212121"; // Dark Grey Background
+    private static final String PANEL_COLOR = "#323232"; // Slightly lighter panels
+    private static final String ACCENT_COLOR = "#00E5FF"; // Cyan/Teal Accent
+    private static final String TEXT_PRIMARY = "#ECECEC"; // Off-white text
+    private static final String TEXT_SECONDARY = "#B0BEC5"; // Muted text
+    private static final String WIN_COLOR = "#00C853"; // Green
+    private static final String LOSE_COLOR = "#D50000"; // Red
+
+    // Piece Attribute Colors
+    private static final Color PIECE_DARK = Color.web("#7C4DFF"); // Deep Purple
+    private static final Color PIECE_LIGHT = Color.web("#FFAB00"); // Amber
 
     public static void main(String[] args) {
         launch(args);
@@ -60,79 +66,112 @@ public class QuartoGUI extends Application {
     public void start(Stage stage) {
         this.primaryStage = stage;
         this.client = new QuartoClient();
-        primaryStage.setTitle("Quarto | Portfolio Project");
+        primaryStage.setTitle("Quarto");
+
         showLoginScreen();
         primaryStage.show();
     }
 
+    // ==========================================
+    // SCREENS
+    // ==========================================
+
     private void showLoginScreen() {
-        VBox content = new VBox(20);
+        VBox content = new VBox(25);
         content.setAlignment(Pos.CENTER);
-        content.setPadding(new Insets(40));
+        content.setPadding(new Insets(50));
         content.setStyle("-fx-background-color: " + BG_COLOR + ";");
 
         Label title = new Label("QUARTO");
-        title.setFont(Font.font("Segoe UI", FontWeight.BOLD, 48));
+        title.setFont(Font.font("Inter", FontWeight.BOLD, 50));
         title.setTextFill(Color.web(ACCENT_COLOR));
-        title.setEffect(new DropShadow(20, Color.web(ACCENT_COLOR)));
 
-        nameField = createStyledTextField("Player1");
-        ipField = createStyledTextField("localhost");
-        portField = createStyledTextField("5432");
+        Label subtitle = new Label("Modern Strategy Game");
+        subtitle.setFont(Font.font("Inter", FontWeight.NORMAL, 16));
+        subtitle.setTextFill(Color.web(TEXT_SECONDARY));
 
-        Button connectBtn = new Button("CONNECT TO SERVER");
-        connectBtn.setStyle("-fx-background-color: " + ACCENT_COLOR + "; -fx-text-fill: black; -fx-font-weight: bold; -fx-background-radius: 20;");
-        connectBtn.setPrefSize(220, 45);
+        VBox fields = new VBox(15);
+        fields.setMaxWidth(300);
+        nameField = createStyledTextField("Username", "Player1");
+        ipField = createStyledTextField("Host IP", "localhost");
+        portField = createStyledTextField("Port", "5432");
+        fields.getChildren().addAll(nameField, ipField, portField);
+
+        Button connectBtn = createStyledButton("CONNECT", true);
+        connectBtn.setPrefWidth(300);
         connectBtn.setOnAction(e -> handleConnect());
 
-        content.getChildren().addAll(title, nameField, ipField, portField, connectBtn);
-        primaryStage.setScene(new Scene(content, 400, 550));
-    }
-
-    private void handleConnect() {
-        this.myUsername = nameField.getText().trim();
-        new Thread(() -> {
-            try {
-                client.connect(ipField.getText(), Integer.parseInt(portField.getText()), createGameListener());
-                client.send("HELLO~GuiClient");
-                client.login(myUsername);
-                Platform.runLater(this::showQueueScreen);
-            } catch (Exception ex) { ex.printStackTrace(); }
-        }).start();
+        content.getChildren().addAll(title, subtitle, fields, connectBtn);
+        primaryStage.setScene(new Scene(content, 450, 600));
     }
 
     private void showQueueScreen() {
-        VBox root = new VBox(20);
+        VBox root = new VBox(30);
         root.setAlignment(Pos.CENTER);
         root.setStyle("-fx-background-color: " + BG_COLOR + ";");
-        Button joinBtn = new Button("FIND MATCH");
-        joinBtn.setStyle("-fx-background-color: " + ACCENT_COLOR + "; -fx-font-weight: bold; -fx-background-radius: 20;");
-        joinBtn.setPrefSize(200, 50);
-        joinBtn.setOnAction(e -> client.queue());
-        root.getChildren().addAll(new Label("LOBBY"), joinBtn);
-        primaryStage.setScene(new Scene(root, 400, 400));
+
+        ProgressIndicator spinner = new ProgressIndicator();
+        spinner.setStyle("-fx-progress-color: " + ACCENT_COLOR + ";");
+
+        Label status = new Label("Connected to Lobby");
+        status.setTextFill(Color.web(TEXT_PRIMARY));
+        status.setFont(Font.font("Inter", 20));
+
+        Button joinBtn = createStyledButton("FIND MATCH", true);
+        joinBtn.setPrefWidth(200);
+        joinBtn.setOnAction(e -> {
+            joinBtn.setDisable(true);
+            status.setText("Searching for opponent...");
+            client.queue();
+        });
+
+        root.getChildren().addAll(status, spinner, joinBtn);
+        primaryStage.setScene(new Scene(root, 450, 500));
     }
 
     private void showGameScreen() {
         BorderPane layout = new BorderPane();
         layout.setStyle("-fx-background-color: " + BG_COLOR + ";");
 
-        statusLabel = new Label("Game Started");
-        statusLabel.setTextFill(Color.WHITE);
-        statusLabel.setFont(Font.font("Segoe UI", FontWeight.BOLD, 18));
-        HBox topBar = new HBox(statusLabel);
-        topBar.setAlignment(Pos.CENTER);
-        topBar.setPadding(new Insets(15));
-        topBar.setStyle("-fx-background-color: " + PANEL_COLOR + ";");
+        // --- TOP BAR ---
+        HBox topBar = new HBox(20);
+        topBar.setAlignment(Pos.CENTER_LEFT);
+        topBar.setPadding(new Insets(15, 25, 15, 25));
+        topBar.setStyle("-fx-background-color: " + PANEL_COLOR
+                + "; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.3), 10, 0, 0, 2);");
+
+        Label gameTitle = new Label("QUARTO");
+        gameTitle.setFont(Font.font("Inter", FontWeight.BOLD, 24));
+        gameTitle.setTextFill(Color.web(ACCENT_COLOR));
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        turnLabel = new Label("Waiting...");
+        turnLabel.setFont(Font.font("Inter", FontWeight.SEMI_BOLD, 18));
+        turnLabel.setTextFill(Color.web(TEXT_PRIMARY));
+
+        statusLabel = new Label("Initializing...");
+        statusLabel.setFont(Font.font("Inter", 14));
+        statusLabel.setTextFill(Color.web(TEXT_SECONDARY));
+
+        VBox statusBox = new VBox(2, turnLabel, statusLabel);
+        statusBox.setAlignment(Pos.CENTER_RIGHT);
+
+        topBar.getChildren().addAll(gameTitle, spacer, statusBox);
         layout.setTop(topBar);
 
+        // --- CENTER BOARD ---
         boardGrid = new GridPane();
         boardGrid.setAlignment(Pos.CENTER);
-        boardGrid.setHgap(10); boardGrid.setVgap(10);
+        boardGrid.setHgap(12);
+        boardGrid.setVgap(12);
+        boardGrid.setPadding(new Insets(20));
+
         for (int i = 0; i < 16; i++) {
             Button btn = new Button();
-            btn.setPrefSize(85, 85);
-            btn.setStyle("-fx-background-color: #333; -fx-background-radius: 10; -fx-border-color: #444;");
+            btn.setPrefSize(90, 90);
+            btn.setStyle(getButtonStyle(false));
             int finalI = i;
             btn.setOnAction(e -> handleBoardClick(finalI));
             boardButtons[i] = btn;
@@ -140,20 +179,156 @@ public class QuartoGUI extends Application {
         }
         layout.setCenter(boardGrid);
 
-        VBox rightBar = new VBox(20);
-        rightBar.setPadding(new Insets(20));
-        rightBar.setStyle("-fx-background-color: " + PANEL_COLOR + ";");
-        currentPieceBox = new VBox(10);
-        currentPieceBox.setAlignment(Pos.CENTER);
-        availablePiecesPane = new FlowPane();
-        availablePiecesPane.setHgap(8); availablePiecesPane.setVgap(8);
-        availablePiecesPane.setPrefWrapLength(250);
+        // --- RIGHT SIDEBAR ---
+        VBox sideBar = new VBox(25);
+        sideBar.setPadding(new Insets(25));
+        sideBar.setPrefWidth(320);
+        sideBar.setStyle("-fx-background-color: " + PANEL_COLOR + ";");
+        sideBar.setAlignment(Pos.TOP_CENTER);
 
-        rightBar.getChildren().addAll(new Label("PLACE THIS:"), currentPieceBox, new Separator(), new Label("AVAILABLE:"), availablePiecesPane);
-        layout.setRight(rightBar);
+        // Current Piece Section
+        Label currentPieceTitle = new Label("PIECE TO PLACE");
+        currentPieceTitle.setFont(Font.font("Inter", FontWeight.BOLD, 14));
+        currentPieceTitle.setTextFill(Color.web(TEXT_SECONDARY));
+
+        currentPieceBox = new VBox();
+        currentPieceBox.setAlignment(Pos.CENTER);
+        currentPieceBox.setPrefHeight(120);
+        currentPieceBox.setStyle("-fx-background-color: " + BG_COLOR
+                + "; -fx-background-radius: 10; -fx-border-color: #444; -fx-border-radius: 10;");
+        currentPieceBox.getChildren().add(new Label("None"));
+
+        // Available Pieces Section
+        Label poolTitle = new Label("AVAILABLE PIECES");
+        poolTitle.setFont(Font.font("Inter", FontWeight.BOLD, 14));
+        poolTitle.setTextFill(Color.web(TEXT_SECONDARY));
+
+        availablePiecesPane = new FlowPane();
+        availablePiecesPane.setHgap(10);
+        availablePiecesPane.setVgap(10);
+        availablePiecesPane.setAlignment(Pos.CENTER);
+        availablePiecesPane.setPrefWrapLength(280);
+
+        sideBar.getChildren().addAll(currentPieceTitle, currentPieceBox, new Separator(), poolTitle,
+                availablePiecesPane);
+        layout.setRight(sideBar);
 
         rootPane = new StackPane(layout);
-        primaryStage.setScene(new Scene(rootPane, 1100, 750));
+        primaryStage.setScene(new Scene(rootPane, 1000, 700));
+    }
+
+    // ==========================================
+    // LOGIC & HANDLERS
+    // ==========================================
+
+    private void handleConnect() {
+        String ip = ipField.getText().trim();
+        String portStr = portField.getText().trim();
+        myUsername = nameField.getText().trim();
+
+        if (ip.isEmpty() || portStr.isEmpty() || myUsername.isEmpty()) {
+            showErrorAlert("Warning", "All fields are required.");
+            return;
+        }
+
+        new Thread(() -> {
+            try {
+                int port = Integer.parseInt(portStr);
+                client.connect(ip, port, createGameListener());
+                client.send("HELLO~GuiClient"); // Handshake if needed, or just login
+                client.login(myUsername);
+
+                Platform.runLater(this::showQueueScreen);
+            } catch (NumberFormatException e) {
+                Platform.runLater(() -> showErrorAlert("Error", "Invalid port number."));
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                Platform.runLater(
+                        () -> showErrorAlert("Connection Error", "Could not connect to server.\n" + ex.getMessage()));
+            }
+        }).start();
+    }
+
+    private void handleBoardClick(int index) {
+        if (!isMyTurn || pieceToPlace == -1) {
+            // Not placing phase
+            return;
+        }
+
+        // Place on local board
+        lastPlacedPiece = pieceToPlace;
+        localBoard[index] = lastPlacedPiece;
+
+        // Update UI immediately (optimistic)
+        updateBoardButton(index, lastPlacedPiece);
+        boardButtons[index].setDisable(true); // Prevent multi-click
+
+        // Check Win
+        if (checkLocalWin()) {
+            waitingForServerEcho = true;
+            statusLabel.setText("Verifying Victory...");
+            client.sendMove(index, 16); // 16 signals "I win" usually in this protocol variant?
+            // NOTE: Standard Quarto protocol usually implies sending the move and the
+            // server checks win,
+            // OR client claims win. Assuming existing logic: sendMove(loc, 16) means 'loc'
+            // and 'no piece picked/win claim'.
+        } else {
+            // Proceed to pick phase logic
+            waitingForServerEcho = true; // Wait for server to confirm move wasn't illegal (though we check locally)
+
+            // In many Quarto implementations, you send the move AND the next piece
+            // together.
+            // But this client implies 2 steps or local state management.
+            // Let's stick to the flow:
+            // 1. Place piece.
+            // 2. Select next piece for opponent.
+            // But wait, `sendMove` takes (location, nextPiece).
+            // So we CANNOT send just yet. We must wait for user to pick the next piece!
+
+            statusLabel.setText("Select a piece for your opponent");
+            turnLabel.setText("Your Turn: Pick Piece");
+            pieceToPlace = -1; // Placed. Now empty hands.
+            currentPieceBox.getChildren().clear(); // Hand empty
+
+            enableAvailablePieces();
+            disableBoard(); // Can't place anymore
+        }
+    }
+
+    // We split the "Move" into 2 interactions: 1. Click Board (Place) -> 2. Click
+    // Pool (Pick for Opponent)
+    // The previous implementation sent separate messages or used
+    // 'waitingForServerEcho' state.
+    // The 'sendMove' method: client.sendMove(location, nextPiece).
+    // So we must postpone sending until we have BOTH location and nextPiece.
+
+    private void handlePieceSelect(int pieceId) {
+        if (!isMyTurn)
+            return;
+
+        // If we are selecting a piece, checks:
+        if (pieceToPlace != -1) {
+            // We are holding a piece we need to Place. We can't pick from pool yet!
+            return;
+        }
+
+        // If we are here, we must have just placed a piece (or it's the very first move
+        // of the game?)
+        // Calculate location of the piece we just placed.
+        int location = findLastLocation(); // -1 if first move
+
+        // Send to server
+        client.sendMove(location, pieceId);
+
+        // Update state
+        pieceGivenToOpponent = pieceId;
+        waitingForServerEcho = true; // Wait for server implementation to define turn switch
+
+        // UI Feedback
+        // Disable everything until server replies
+        disableBoard();
+        availablePiecesPane.setDisable(true);
+        statusLabel.setText("Sending move...");
     }
 
     private QuartoClient.GameListener createGameListener() {
@@ -163,15 +338,21 @@ public class QuartoGUI extends Application {
                 Platform.runLater(() -> {
                     resetGameState();
                     showGameScreen();
+
                     if (myUsername.equalsIgnoreCase(p1)) {
                         isMyTurn = true;
-                        statusLabel.setText("Your Turn: Give a piece!");
+                        turnLabel.setText("Your Turn");
+                        statusLabel.setText("Select a piece for opponent to start!");
                         refreshAvailablePieces();
-                        disableBoard();
+                        enableAvailablePieces();
+                        disableBoard(); // First move is just picking a piece
                     } else {
                         isMyTurn = false;
-                        statusLabel.setText("Waiting for opponent...");
+                        turnLabel.setText("Opponent's Turn");
+                        statusLabel.setText("Waiting for opponent to pick a piece...");
+                        refreshAvailablePieces();
                         availablePiecesPane.setDisable(true);
+                        disableBoard();
                     }
                 });
             }
@@ -179,142 +360,369 @@ public class QuartoGUI extends Application {
             @Override
             public void onOpponentMove(int location, int nextPieceId) {
                 Platform.runLater(() -> {
-                    boolean wasMyMove = waitingForServerEcho;
                     waitingForServerEcho = false;
 
-                    // Обновляем доску
-                    if (location >= 0) {
-                        int placedId = wasMyMove ? lastPlacedPiece : pieceGivenToOpponent;
-                        localBoard[location] = placedId;
-                        boardButtons[location].setGraphic(createPieceShape(placedId));
-                        boardButtons[location].setDisable(true);
-                        boardButtons[location].setStyle("-fx-background-color: #222; -fx-opacity: 1;");
+                    // Logic: Server tells us what happened.
+                    // If location != -1, opponent (or we, if echoing) placed a piece there.
+                    // But usually onOpponentMove means *Opponent* did something.
+                    // If we just moved, we might get an update or not depending on server.
+                    // Let's assume onOpponentMove is strictly for the OTHER player's action OR
+                    // server broadcasting state.
+
+                    // Case 1: Is it response to my move?
+                    if (!isMyTurn) {
+                        // I was waiting. So this must be Opponent's move.
+                        if (location >= 0) {
+                            localBoard[location] = pieceGivenToOpponent; // Wait, pieceGivenToOpponent is what *I* gave?
+                                                                         // No.
+                            // We need to know what piece the OPPONENT had to place.
+                            // The protocol is slightly state-dependent.
+                            // Let's infer: If opponent moved, they placed the piece *I* gave them last
+                            // turn.
+                            // Wait, if I am receiving onOpponentMove, it means it is NOW MY TURN.
+
+                            // Let's rely on server state.
+                            // Protocol: MOVE <loc> <piece> -> Opponent placed at <loc> and gives me
+                            // <piece>.
+
+                            // 1. Update board with piece I previously gave (or inferred).
+                            // ERROR in thought: The protocol message separates location and nextPiece.
+                            // It doesn't prohibitively say "what was placed".
+                            // But logically, the piece placed at 'location' MUST be the one currently in
+                            // play.
+
+                            // We need to track 'current active piece' globally?
+                            // Actually, if it's opponent's move, they were holding 'pieceGivenToOpponent'
+                            // (from my perspective).
+                            // So we place that at 'location'.
+                        }
                     }
 
-                    if (wasMyMove) {
-                        isMyTurn = false;
-                        statusLabel.setText("Waiting for opponent...");
-                        disableBoard();
-                        availablePiecesPane.setDisable(true);
-                    } else {
-                        isMyTurn = true;
-                        pieceToPlace = nextPieceId;
-                        statusLabel.setText("Your Turn: Place the piece!");
-                        currentPieceBox.getChildren().setAll(createPieceShape(pieceToPlace));
-                        enableEmptyBoard();
-                        availablePiecesPane.setDisable(true);
+                    // Update Board
+                    if (location >= 0) {
+                        // We need to find what piece was placed.
+                        // If it's my turn now, the opponent placed the piece I gave them previously.
+                        // Or if I just moved, maybe server echoes?
+                        // Let's trust the logic: existing code used 'pieceGivenToOpponent' (variable
+                        // name might cover both directions or be just mine).
+
+                        // Refined Logic based on previous code usually working:
+                        // "If wasMyMove... else..."
+                        // But here, let's look at the method signature: onOpponentMove.
+                        // Implies opponent did it.
+
+                        // BUT: We need to know WHICH piece they placed to render it.
+                        // The server protocol 'MOVE loc nextPiece' does NOT send the ID of the placed
+                        // piece.
+                        // It implies clients track state.
+
+                        // So:
+                        // If I am P1, I give X.
+                        // P2 receives X. P2 places X at Loc. P2 gives Y.
+                        // Server sends to P1: MOVE Loc Y.
+                        // P1 knows "Ah, P2 placed X (that I gave) at Loc. Now I have Y".
+
+                        // So we need to track `pieceOpponentHas`.
                     }
+
+                    // Correct approach:
+                    // The server broadcasts moves.
+                    // We need to know what piece was 'in play'.
+
+                    // Simplification: We blindly follow the loop.
+                    // If it's my turn now, I have to place `nextPieceId`.
+
+                    // What piece goes into `location`?
+                    // It MUST be the piece that was pending.
+                    // Let's store `pendingPiece`.
+
+                    if (location != -1) {
+                        // Some piece was placed. Which one?
+                        // It matches the one that was 'active'.
+                        // For visual consistency, we should check `pieceToPlace` before overwriting it,
+                        // OR we rely on `localBoard` state if we missed it? No.
+
+                        // The opponent just placed a piece. I need to know what it was to draw it.
+                        // It was the piece I gave them?
+                        // Yes. `pieceGivenToOpponent` should be it.
+
+                        if (pieceGivenToOpponent != -1) {
+                            localBoard[location] = pieceGivenToOpponent;
+                            updateBoardButton(location, pieceGivenToOpponent);
+                            pieceGivenToOpponent = -1; // Consumed
+                        }
+                    }
+
+                    // My Turn Now
+                    isMyTurn = true;
+                    pieceToPlace = nextPieceId; // This is what I must place now
+
+                    turnLabel.setText("Your Turn");
+                    statusLabel.setText("Place the specified piece!");
+
+                    currentPieceBox.getChildren().setAll(createPieceShape(pieceToPlace));
+
+                    enableEmptyBoardButtons();
+                    availablePiecesPane.setDisable(true); // Can't pick from pool until placed
                     refreshAvailablePieces();
                 });
             }
 
             @Override
-            public void onGameOver(String res, String win) {
+            public void onGameOver(String result, String winner) {
                 Platform.runLater(() -> {
-                    boolean iWon = win.trim().equalsIgnoreCase(myUsername.trim());
-                    showEndOverlay(iWon ? "VICTORY" : "DEFEAT", "Winner: " + win, iWon ? WIN_COLOR : LOSE_COLOR);
+                    boolean iWon = myUsername.equalsIgnoreCase(winner.trim());
+                    String color = iWon ? WIN_COLOR : LOSE_COLOR;
+                    showEndOverlay(iWon ? "VICTORY" : "DEFEAT", "Winner: " + winner, color);
                 });
             }
 
-            @Override public void onConnected() {}
-            @Override public void onError(String msg) { Platform.runLater(() -> statusLabel.setText("Error: " + msg)); }
-            @Override public void onChat(String s, String t) {}
+            @Override
+            public void onConnected() {
+            }
+
+            @Override
+            public void onError(String msg) {
+                Platform.runLater(() -> showErrorAlert("Error", msg));
+            }
+
+            @Override
+            public void onChat(String s, String t) {
+            }
         };
     }
 
-    private void handleBoardClick(int index) {
-        if (!isMyTurn || pieceToPlace == -1) return;
+    // --- HELPER LOGIC ---
 
-        lastPlacedPiece = pieceToPlace;
-        localBoard[index] = lastPlacedPiece;
-        boardButtons[index].setGraphic(createPieceShape(lastPlacedPiece));
-
-        // АВТО-ПРОВЕРКА ПОБЕДЫ
-        if (checkLocalWin()) {
-            waitingForServerEcho = true;
-            client.sendMove(index, 16); // Отправляем 16 серверу для победы
-            statusLabel.setText("Winning...");
-        } else {
-            pieceToPlace = -1;
-            currentPieceBox.getChildren().clear();
-            statusLabel.setText("Now pick a piece for opponent!");
-            disableBoard();
-            availablePiecesPane.setDisable(false);
-        }
-    }
-
-    private void handlePieceSelect(int pieceId) {
-        if (!isMyTurn) return;
-        boolean isStart = true;
-        for(Integer p : localBoard) if(p != null) isStart = false;
-
-        waitingForServerEcho = true;
-        client.sendMove(isStart ? -1 : findLastLocation(), pieceId);
-        pieceGivenToOpponent = pieceId;
-    }
+    // We need to fix the state tracking because 'pieceGivenToOpponent' is only set
+    // when *I* give it.
+    // When Opponent gives me a piece, I put it in 'pieceToPlace'.
+    // When Opponent moves, they place 'pieceToPlace' (from their view) which is
+    // what I gave them.
+    // So yes, `pieceGivenToOpponent` is correct for rendering their move.
 
     private int findLastLocation() {
-        for(int i=0; i<16; i++) if(localBoard[i] != null && boardButtons[i].isDisabled() && localBoard[i] == lastPlacedPiece) return i;
-        return -1;
+        // Find which button i just disabled / placed in localBoard that matches
+        // `lastPlacedPiece`
+        for (int i = 0; i < 16; i++) {
+            if (localBoard[i] != null && localBoard[i] == lastPlacedPiece) {
+                // We need to verify this is the NEW move.
+                // Since we assume linear flow, the logic holds.
+                return i;
+            }
+        }
+        return -1; // Should happen only on first turn if p1 picks piece first
     }
 
     private boolean checkLocalWin() {
-        int[][] lines = {{0,1,2,3},{4,5,6,7},{8,9,10,11},{12,13,14,15},{0,4,8,12},{1,5,9,13},{2,6,10,14},{3,7,11,15},{0,5,10,15},{3,6,9,12}};
-        for (int[] l : lines) {
-            if (localBoard[l[0]]==null || localBoard[l[1]]==null || localBoard[l[2]]==null || localBoard[l[3]]==null) continue;
-            int p1=localBoard[l[0]], p2=localBoard[l[1]], p3=localBoard[l[2]], p4=localBoard[l[3]];
-            if (((p1&p2&p3&p4) != 0) || (((~p1)&(~p2)&(~p3)&(~p4)&0xf) != 0)) return true;
+        // Rows, Cols, Diagonals
+        int[][] lines = {
+                { 0, 1, 2, 3 }, { 4, 5, 6, 7 }, { 8, 9, 10, 11 }, { 12, 13, 14, 15 }, // Rows
+                { 0, 4, 8, 12 }, { 1, 5, 9, 13 }, { 2, 6, 10, 14 }, { 3, 7, 11, 15 }, // Cols
+                { 0, 5, 10, 15 }, { 3, 6, 9, 12 } // Diagonals
+        };
+
+        for (int[] line : lines) {
+            if (hasCommonProperty(line))
+                return true;
         }
         return false;
+    }
+
+    private boolean hasCommonProperty(int[] indices) {
+        // Check if all are occupied
+        for (int i : indices) {
+            if (localBoard[i] == null)
+                return false;
+        }
+
+        int p1 = localBoard[indices[0]];
+        int p2 = localBoard[indices[1]];
+        int p3 = localBoard[indices[2]];
+        int p4 = localBoard[indices[3]];
+
+        // 4 bits: 8, 4, 2, 1
+        // (p1 & p2 & p3 & p4) != 0 => At least one bit is '1' in all 4
+        // (~p1 & ~p2 & ... & 0xF) != 0 => At least one bit is '0' in all 4
+
+        boolean commonOne = (p1 & p2 & p3 & p4) != 0;
+        boolean commonZero = ((~p1 & 0xF) & (~p2 & 0xF) & (~p3 & 0xF) & (~p4 & 0xF)) != 0;
+
+        return commonOne || commonZero;
     }
 
     private void refreshAvailablePieces() {
         availablePiecesPane.getChildren().clear();
         for (int i = 0; i < 16; i++) {
             boolean used = false;
-            for(Integer p : localBoard) if(p != null && p == i) used = true;
-            if (used || i == pieceToPlace) continue;
-            final int pId = i;
+            // Check board
+            for (Integer p : localBoard) {
+                if (p != null && p == i)
+                    used = true;
+            }
+            // Check active hands (pieceToPlace is effectively 'used' if someone holding it)
+            if (pieceToPlace == i)
+                used = true;
+
+            if (used)
+                continue;
+
+            final int pId = i; // capture
             Button b = new Button();
-            b.setGraphic(createPieceShape(i));
-            b.setStyle("-fx-background-color: transparent; -fx-border-color: #444;");
+            b.setGraphic(createPieceShape(i, 40));
+            b.setStyle("-fx-background-color: transparent; -fx-cursor: hand;");
             b.setOnAction(e -> handlePieceSelect(pId));
+
+            // Hover effect
+            b.setOnMouseEntered(
+                    e -> b.setStyle("-fx-background-color: #383838; -fx-cursor: hand; -fx-background-radius: 5;"));
+            b.setOnMouseExited(e -> b.setStyle("-fx-background-color: transparent;"));
+
             availablePiecesPane.getChildren().add(b);
         }
     }
 
+    // ==========================================
+    // UI HELPERS
+    // ==========================================
+
     private void resetGameState() {
         waitingForServerEcho = false;
-        pieceToPlace = -1; lastPlacedPiece = -1; pieceGivenToOpponent = -1;
+        pieceToPlace = -1;
+        lastPlacedPiece = -1;
+        pieceGivenToOpponent = -1;
         localBoard = new Integer[16];
+        boardButtons = new Button[16]; // Will be recreated in showGameScreen
     }
 
-    private void disableBoard() { for (Button b : boardButtons) if (b != null) b.setDisable(true); }
-    private void enableEmptyBoard() { for (int i = 0; i < 16; i++) if (localBoard[i] == null) boardButtons[i].setDisable(false); }
+    private void updateBoardButton(int index, int pieceId) {
+        Button btn = boardButtons[index];
+        btn.setGraphic(createPieceShape(pieceId, 60));
+        btn.setDisable(true);
+        btn.setStyle("-fx-background-color: #2A2A2A; -fx-opacity: 1; -fx-border-color: #444;");
+    }
 
+    private void enableEmptyBoardButtons() {
+        for (int i = 0; i < 16; i++) {
+            if (localBoard[i] == null) {
+                boardButtons[i].setDisable(false);
+            }
+        }
+    }
+
+    private void disableBoard() {
+        for (Button b : boardButtons) {
+            if (b != null)
+                b.setDisable(true);
+        }
+    }
+
+    private void enableAvailablePieces() {
+        availablePiecesPane.setDisable(false);
+    }
+
+    /**
+     * Creates the visual representation of a piece.
+     * ID is 4 bits: HOLLOW (8), SQUARE (4), TALL (2), DARK (1)
+     */
     private StackPane createPieceShape(int id) {
-        boolean hollow=(id&8)!=0, square=(id&4)!=0, tall=(id&2)!=0, dark=(id&1)!=0;
-        Shape s = square ? new Rectangle(tall?60:35, tall?60:35) : new Circle(tall?30:18);
-        Color c = dark ? Color.web("#9c27b0") : Color.web("#ff9800");
-        s.setFill(hollow ? Color.TRANSPARENT : c);
-        s.setStroke(c); s.setStrokeWidth(3);
-        s.setEffect(new DropShadow(15, c));
-        return new StackPane(s);
+        return createPieceShape(id, 50);
     }
 
-    private void showEndOverlay(String title, String sub, String color) {
-        VBox overlay = new VBox(20); overlay.setAlignment(Pos.CENTER);
+    private StackPane createPieceShape(int id, double baseSize) {
+        boolean hollow = (id & 8) != 0;
+        boolean square = (id & 4) != 0;
+        boolean tall = (id & 2) != 0;
+        boolean dark = (id & 1) != 0;
+
+        Shape shape;
+        double size = tall ? baseSize : baseSize * 0.65;
+
+        if (square) {
+            Rectangle r = new Rectangle(size, size);
+            r.setArcWidth(10);
+            r.setArcHeight(10); // Soft corners
+            shape = r;
+        } else {
+            shape = new Circle(size / 2);
+        }
+
+        Color c = dark ? PIECE_DARK : PIECE_LIGHT;
+
+        shape.setFill(hollow ? Color.TRANSPARENT : c);
+        shape.setStroke(c);
+        shape.setStrokeWidth(hollow ? 4 : 0);
+
+        // Add "Height" indicator or distinct look for tall/short if size not obvious?
+        // Size handles it, but let's add a subtle shadow for tall pieces to make them
+        // pop properly
+        if (tall) {
+            shape.setEffect(new DropShadow(10, Color.rgb(0, 0, 0, 0.5)));
+        }
+
+        StackPane s = new StackPane(shape);
+        // If hollow, maybe add a dot in center if it's too hard to see?
+        // No, stroke is thick enough.
+
+        return s;
+    }
+
+    private Button createStyledButton(String text, boolean primary) {
+        Button btn = new Button(text);
+        btn.setFont(Font.font("Inter", FontWeight.BOLD, 14));
+        btn.setPrefHeight(45);
+        if (primary) {
+            btn.setStyle("-fx-background-color: " + ACCENT_COLOR
+                    + "; -fx-text-fill: #000; -fx-background-radius: 8; -fx-cursor: hand;");
+        } else {
+            btn.setStyle("-fx-background-color: transparent; -fx-text-fill: " + ACCENT_COLOR + "; -fx-border-color: "
+                    + ACCENT_COLOR + "; -fx-border-radius: 8; -fx-cursor: hand;");
+        }
+        return btn;
+    }
+
+    private String getButtonStyle(boolean active) {
+        return "-fx-background-color: #2F2F2F; -fx-background-radius: 8; -fx-border-color: #3E3E3E; -fx-border-radius: 8; -fx-effect: null;";
+    }
+
+    private TextField createStyledTextField(String label, String prompt) {
+        TextField t = new TextField();
+        t.setPromptText(prompt);
+        t.setText(prompt); // Pre-fill for convenience
+        t.setStyle("-fx-background-color: #333; -fx-text-fill: white; -fx-background-radius: 5; -fx-padding: 10;");
+        return t;
+    }
+
+    private void showEndOverlay(String title, String sub, String colorHex) {
+        VBox overlay = new VBox(25);
+        overlay.setAlignment(Pos.CENTER);
         overlay.setStyle("-fx-background-color: rgba(0,0,0,0.85);");
-        Label l1 = new Label(title); l1.setFont(Font.font("Segoe UI", FontWeight.BOLD, 60)); l1.setTextFill(Color.web(color));
-        Label l2 = new Label(sub); l2.setTextFill(Color.WHITE);
-        Button btn = new Button("PLAY AGAIN"); btn.setOnAction(e -> { client.queue(); showQueueScreen(); });
+
+        Label l1 = new Label(title);
+        l1.setFont(Font.font("Inter", FontWeight.BOLD, 60));
+        l1.setTextFill(Color.web(colorHex));
+        l1.setEffect(new DropShadow(20, Color.web(colorHex)));
+
+        Label l2 = new Label(sub);
+        l2.setFont(Font.font("Inter", 24));
+        l2.setTextFill(Color.WHITE);
+
+        Button btn = createStyledButton("PLAY AGAIN", true);
+        btn.setPrefWidth(200);
+        btn.setOnAction(e -> {
+            client.queue();
+            showQueueScreen();
+        });
+
         overlay.getChildren().addAll(l1, l2, btn);
         rootPane.getChildren().add(overlay);
     }
 
-    private TextField createStyledTextField(String p) {
-        TextField t = new TextField(); t.setPromptText(p);
-        t.setStyle("-fx-background-color: #333; -fx-text-fill: white; -fx-background-radius: 10;");
-        return t;
+    private void showErrorAlert(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
     }
 }

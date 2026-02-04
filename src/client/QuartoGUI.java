@@ -112,6 +112,7 @@ public class QuartoGUI extends Application {
 
         ProgressIndicator spinner = new ProgressIndicator();
         spinner.setStyle("-fx-progress-color: " + ACCENT_COLOR + ";");
+        spinner.setVisible(false); // Hide initially
 
         Label status = new Label("Connected to Lobby");
         status.setTextFill(Color.web(TEXT_PRIMARY));
@@ -121,6 +122,7 @@ public class QuartoGUI extends Application {
         joinBtn.setPrefWidth(200);
         joinBtn.setOnAction(e -> {
             joinBtn.setDisable(true);
+            spinner.setVisible(true); // Show on click
             status.setText("Searching for opponent...");
             client.queue();
         });
@@ -263,23 +265,18 @@ public class QuartoGUI extends Application {
         updateBoardButton(index, lastPlacedPiece);
         boardButtons[index].setDisable(true); // Prevent multi-click
 
-        // Check Win
-        if (checkLocalWin()) {
-            waitingForServerEcho = true;
-            statusLabel.setText("Verifying Victory...");
-            client.sendMove(index, 16); // 16 signals "I win" usually in this protocol variant?
-        } else {
-            // Proceed to pick phase logic
-            waitingForServerEcho = true; // Wait for server to confirm move wasn't illegal (though we check locally)
+        // Proceed to pick phase logic
+        // We do NOT check for win locally anymore/notify server with 16.
+        // Server checks win automatically after we send the full move (Loc +
+        // NextPiece).
 
-            statusLabel.setText("Phase 2: SELECT A PIECE FOR OPPONENT");
-            turnLabel.setText("YOUR TURN: Pick Piece");
-            pieceToPlace = -1; // Placed. Now empty hands.
-            currentPieceBox.getChildren().clear(); // Hand empty
+        statusLabel.setText("Phase 2: SELECT A PIECE FOR OPPONENT");
+        turnLabel.setText("YOUR TURN: Pick Piece");
+        pieceToPlace = -1; // Placed. Now empty hands.
+        currentPieceBox.getChildren().clear(); // Hand empty
 
-            enableAvailablePieces();
-            disableBoard(); // Can't place anymore
-        }
+        enableAvailablePieces();
+        disableBoard(); // Can't place anymore
     }
 
     // We split the "Move" into 2 interactions: 1. Click Board (Place) -> 2. Click
@@ -438,48 +435,15 @@ public class QuartoGUI extends Application {
         // `lastPlacedPiece`
         for (int i = 0; i < 16; i++) {
             if (localBoard[i] != null && localBoard[i] == lastPlacedPiece) {
+                // We need to verify this is the NEW move.
+                // Since we assume linear flow, the logic holds.
                 return i;
             }
         }
         return -1; // Should happen only on first turn if p1 picks piece first
     }
 
-    private boolean checkLocalWin() {
-        // Rows, Cols, Diagonals
-        int[][] lines = {
-                { 0, 1, 2, 3 }, { 4, 5, 6, 7 }, { 8, 9, 10, 11 }, { 12, 13, 14, 15 }, // Rows
-                { 0, 4, 8, 12 }, { 1, 5, 9, 13 }, { 2, 6, 10, 14 }, { 3, 7, 11, 15 }, // Cols
-                { 0, 5, 10, 15 }, { 3, 6, 9, 12 } // Diagonals
-        };
-
-        for (int[] line : lines) {
-            if (hasCommonProperty(line))
-                return true;
-        }
-        return false;
-    }
-
-    private boolean hasCommonProperty(int[] indices) {
-        // Check if all are occupied
-        for (int i : indices) {
-            if (localBoard[i] == null)
-                return false;
-        }
-
-        int p1 = localBoard[indices[0]];
-        int p2 = localBoard[indices[1]];
-        int p3 = localBoard[indices[2]];
-        int p4 = localBoard[indices[3]];
-
-        // 4 bits: 8, 4, 2, 1
-        // (p1 & p2 & p3 & p4) != 0 => At least one bit is '1' in all 4
-        // (~p1 & ~p2 & ... & 0xF) != 0 => At least one bit is '0' in all 4
-
-        boolean commonOne = (p1 & p2 & p3 & p4) != 0;
-        boolean commonZero = ((~p1 & 0xF) & (~p2 & 0xF) & (~p3 & 0xF) & (~p4 & 0xF)) != 0;
-
-        return commonOne || commonZero;
-    }
+    // NOTE: Removed local win check as server is authoritative.
 
     private void refreshAvailablePieces() {
         availablePiecesPane.getChildren().clear();

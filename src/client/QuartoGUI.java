@@ -268,25 +268,12 @@ public class QuartoGUI extends Application {
             waitingForServerEcho = true;
             statusLabel.setText("Verifying Victory...");
             client.sendMove(index, 16); // 16 signals "I win" usually in this protocol variant?
-            // NOTE: Standard Quarto protocol usually implies sending the move and the
-            // server checks win,
-            // OR client claims win. Assuming existing logic: sendMove(loc, 16) means 'loc'
-            // and 'no piece picked/win claim'.
         } else {
             // Proceed to pick phase logic
             waitingForServerEcho = true; // Wait for server to confirm move wasn't illegal (though we check locally)
 
-            // In many Quarto implementations, you send the move AND the next piece
-            // together.
-            // But this client implies 2 steps or local state management.
-            // Let's stick to the flow:
-            // 1. Place piece.
-            // 2. Select next piece for opponent.
-            // But wait, `sendMove` takes (location, nextPiece).
-            // So we CANNOT send just yet. We must wait for user to pick the next piece!
-
-            statusLabel.setText("Select a piece for your opponent");
-            turnLabel.setText("Your Turn: Pick Piece");
+            statusLabel.setText("Phase 2: SELECT A PIECE FOR OPPONENT");
+            turnLabel.setText("YOUR TURN: Pick Piece");
             pieceToPlace = -1; // Placed. Now empty hands.
             currentPieceBox.getChildren().clear(); // Hand empty
 
@@ -297,10 +284,6 @@ public class QuartoGUI extends Application {
 
     // We split the "Move" into 2 interactions: 1. Click Board (Place) -> 2. Click
     // Pool (Pick for Opponent)
-    // The previous implementation sent separate messages or used
-    // 'waitingForServerEcho' state.
-    // The 'sendMove' method: client.sendMove(location, nextPiece).
-    // So we must postpone sending until we have BOTH location and nextPiece.
 
     private void handlePieceSelect(int pieceId) {
         if (!isMyTurn)
@@ -341,15 +324,15 @@ public class QuartoGUI extends Application {
 
                     if (myUsername.equalsIgnoreCase(p1)) {
                         isMyTurn = true;
-                        turnLabel.setText("Your Turn");
-                        statusLabel.setText("Select a piece for opponent to start!");
+                        turnLabel.setText("YOUR TURN");
+                        statusLabel.setText("Phase 1: Pick a piece for opponent");
                         refreshAvailablePieces();
                         enableAvailablePieces();
                         disableBoard(); // First move is just picking a piece
                     } else {
                         isMyTurn = false;
-                        turnLabel.setText("Opponent's Turn");
-                        statusLabel.setText("Waiting for opponent to pick a piece...");
+                        turnLabel.setText("OPPONENT'S TURN");
+                        statusLabel.setText("Waiting for opponent...");
                         refreshAvailablePieces();
                         availablePiecesPane.setDisable(true);
                         disableBoard();
@@ -360,111 +343,62 @@ public class QuartoGUI extends Application {
             @Override
             public void onOpponentMove(int location, int nextPieceId) {
                 Platform.runLater(() -> {
-                    waitingForServerEcho = false;
 
-                    // Logic: Server tells us what happened.
-                    // If location != -1, opponent (or we, if echoing) placed a piece there.
-                    // But usually onOpponentMove means *Opponent* did something.
-                    // If we just moved, we might get an update or not depending on server.
-                    // Let's assume onOpponentMove is strictly for the OTHER player's action OR
-                    // server broadcasting state.
+                    if (waitingForServerEcho) {
+                        // === CASE 1: Server confirmed MY move ===
+                        // It means I successfully completed my turn.
+                        waitingForServerEcho = false;
+                        isMyTurn = false;
 
-                    // Case 1: Is it response to my move?
-                    if (!isMyTurn) {
-                        // I was waiting. So this must be Opponent's move.
-                        if (location >= 0) {
-                            localBoard[location] = pieceGivenToOpponent; // Wait, pieceGivenToOpponent is what *I* gave?
-                                                                         // No.
-                            // We need to know what piece the OPPONENT had to place.
-                            // The protocol is slightly state-dependent.
-                            // Let's infer: If opponent moved, they placed the piece *I* gave them last
-                            // turn.
-                            // Wait, if I am receiving onOpponentMove, it means it is NOW MY TURN.
+                        turnLabel.setText("OPPONENT'S TURN");
+                        statusLabel.setText("Waiting for opponent...");
 
-                            // Let's rely on server state.
-                            // Protocol: MOVE <loc> <piece> -> Opponent placed at <loc> and gives me
-                            // <piece>.
+                        // Board is already updated locally from handleBoardClick
+                        // Hand is empty.
 
-                            // 1. Update board with piece I previously gave (or inferred).
-                            // ERROR in thought: The protocol message separates location and nextPiece.
-                            // It doesn't prohibitively say "what was placed".
-                            // But logically, the piece placed at 'location' MUST be the one currently in
-                            // play.
+                        disableBoard();
+                        availablePiecesPane.setDisable(true);
 
-                            // We need to track 'current active piece' globally?
-                            // Actually, if it's opponent's move, they were holding 'pieceGivenToOpponent'
-                            // (from my perspective).
-                            // So we place that at 'location'.
+                    } else {
+                        // === CASE 2: Opponent made a move ===
+
+                        // 1. Reflect Opponent's Placement (if valid)
+                        // The opponent placed the piece that *I* (or previous player) gave them.
+                        // We stored this in pieceGivenToOpponent when WE selected it.
+                        // OR if we just joined, we rely on game state sync (not fully implemented in
+                        // this simple client).
+                        // Note: If I am player 2, first move I receive is (-1, PieceID).
+
+                        if (location >= 0 && location < 16) {
+                            if (pieceGivenToOpponent != -1) {
+                                localBoard[location] = pieceGivenToOpponent;
+                                updateBoardButton(location, pieceGivenToOpponent);
+                                pieceGivenToOpponent = -1; // Consumed
+                            }
                         }
-                    }
 
-                    // Update Board
-                    if (location >= 0) {
-                        // We need to find what piece was placed.
-                        // If it's my turn now, the opponent placed the piece I gave them previously.
-                        // Or if I just moved, maybe server echoes?
-                        // Let's trust the logic: existing code used 'pieceGivenToOpponent' (variable
-                        // name might cover both directions or be just mine).
+                        // 2. Prepare for My Turn
+                        // The opponent gave me 'nextPieceId'.
 
-                        // Refined Logic based on previous code usually working:
-                        // "If wasMyMove... else..."
-                        // But here, let's look at the method signature: onOpponentMove.
-                        // Implies opponent did it.
+                        // If nextPieceId is 16 (Win claim), we might get Game Over soon, but logic
+                        // stands.
+                        if (nextPieceId >= 0 && nextPieceId < 16) {
+                            isMyTurn = true;
+                            pieceToPlace = nextPieceId;
 
-                        // BUT: We need to know WHICH piece they placed to render it.
-                        // The server protocol 'MOVE loc nextPiece' does NOT send the ID of the placed
-                        // piece.
-                        // It implies clients track state.
+                            turnLabel.setText("YOUR TURN");
+                            statusLabel.setText("Phase 1: Place the piece on the board");
 
-                        // So:
-                        // If I am P1, I give X.
-                        // P2 receives X. P2 places X at Loc. P2 gives Y.
-                        // Server sends to P1: MOVE Loc Y.
-                        // P1 knows "Ah, P2 placed X (that I gave) at Loc. Now I have Y".
-
-                        // So we need to track `pieceOpponentHas`.
-                    }
-
-                    // Correct approach:
-                    // The server broadcasts moves.
-                    // We need to know what piece was 'in play'.
-
-                    // Simplification: We blindly follow the loop.
-                    // If it's my turn now, I have to place `nextPieceId`.
-
-                    // What piece goes into `location`?
-                    // It MUST be the piece that was pending.
-                    // Let's store `pendingPiece`.
-
-                    if (location != -1) {
-                        // Some piece was placed. Which one?
-                        // It matches the one that was 'active'.
-                        // For visual consistency, we should check `pieceToPlace` before overwriting it,
-                        // OR we rely on `localBoard` state if we missed it? No.
-
-                        // The opponent just placed a piece. I need to know what it was to draw it.
-                        // It was the piece I gave them?
-                        // Yes. `pieceGivenToOpponent` should be it.
-
-                        if (pieceGivenToOpponent != -1) {
-                            localBoard[location] = pieceGivenToOpponent;
-                            updateBoardButton(location, pieceGivenToOpponent);
-                            pieceGivenToOpponent = -1; // Consumed
+                            currentPieceBox.getChildren().setAll(createPieceShape(pieceToPlace));
+                            enableEmptyBoardButtons();
+                        } else {
+                            // Valid piece not received (maybe game over code?)
+                            statusLabel.setText("Checking Game Status...");
                         }
+
+                        availablePiecesPane.setDisable(true); // Can't pick from pool until placed
+                        refreshAvailablePieces();
                     }
-
-                    // My Turn Now
-                    isMyTurn = true;
-                    pieceToPlace = nextPieceId; // This is what I must place now
-
-                    turnLabel.setText("Your Turn");
-                    statusLabel.setText("Place the specified piece!");
-
-                    currentPieceBox.getChildren().setAll(createPieceShape(pieceToPlace));
-
-                    enableEmptyBoardButtons();
-                    availablePiecesPane.setDisable(true); // Can't pick from pool until placed
-                    refreshAvailablePieces();
                 });
             }
 
@@ -473,7 +407,12 @@ public class QuartoGUI extends Application {
                 Platform.runLater(() -> {
                     boolean iWon = myUsername.equalsIgnoreCase(winner.trim());
                     String color = iWon ? WIN_COLOR : LOSE_COLOR;
-                    showEndOverlay(iWon ? "VICTORY" : "DEFEAT", "Winner: " + winner, color);
+                    String message = iWon ? "VICTORY" : "DEFEAT";
+                    if ("DRAW".equalsIgnoreCase(result)) {
+                        message = "DRAW";
+                        color = "#FFD700"; // Gold
+                    }
+                    showEndOverlay(message, "Winner: " + winner, color);
                 });
             }
 
@@ -494,20 +433,11 @@ public class QuartoGUI extends Application {
 
     // --- HELPER LOGIC ---
 
-    // We need to fix the state tracking because 'pieceGivenToOpponent' is only set
-    // when *I* give it.
-    // When Opponent gives me a piece, I put it in 'pieceToPlace'.
-    // When Opponent moves, they place 'pieceToPlace' (from their view) which is
-    // what I gave them.
-    // So yes, `pieceGivenToOpponent` is correct for rendering their move.
-
     private int findLastLocation() {
         // Find which button i just disabled / placed in localBoard that matches
         // `lastPlacedPiece`
         for (int i = 0; i < 16; i++) {
             if (localBoard[i] != null && localBoard[i] == lastPlacedPiece) {
-                // We need to verify this is the NEW move.
-                // Since we assume linear flow, the logic holds.
                 return i;
             }
         }
@@ -561,7 +491,7 @@ public class QuartoGUI extends Application {
                     used = true;
             }
             // Check active hands (pieceToPlace is effectively 'used' if someone holding it)
-            if (pieceToPlace == i)
+            if (pieceToPlace == i && pieceToPlace != -1)
                 used = true;
 
             if (used)
@@ -599,7 +529,9 @@ public class QuartoGUI extends Application {
         Button btn = boardButtons[index];
         btn.setGraphic(createPieceShape(pieceId, 60));
         btn.setDisable(true);
-        btn.setStyle("-fx-background-color: #2A2A2A; -fx-opacity: 1; -fx-border-color: #444;");
+        // Force opacity to 1.0 to prevent graying out
+        btn.setOpacity(1.0);
+        btn.setStyle("-fx-background-color: #2A2A2A; -fx-opacity: 1.0; -fx-border-color: #444;");
     }
 
     private void enableEmptyBoardButtons() {

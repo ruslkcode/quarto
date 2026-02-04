@@ -17,23 +17,30 @@ public class Game {
     private Map<Integer, Piece> allPieces;
     private Map<Integer, Piece> availablePieces;
 
-    /*@
-      private invariant board != null;
-      private invariant currentPlayer == 1 || currentPlayer == 2;
-      private invariant allPieces != null;
-      private invariant availablePieces != null;
-    @*/
+    /*
+     * @
+     * private invariant board != null;
+     * private invariant currentPlayer == 1 || currentPlayer == 2;
+     * private invariant allPieces != null;
+     * private invariant availablePieces != null;
+     * 
+     * @
+     */
 
     /**
      * Constructs a new Quarto game.
      * Initializes an empty board, sets the starting player,
      * and creates all available pieces.
+     * 
      * @param currentPlayer the player who starts the game (1 or 2)
      */
-    /*@
-      requires currentPlayer == 1 || currentPlayer == 2;
-      ensures getCurrentPlayer() == currentPlayer;
-    @*/
+    /*
+     * @
+     * requires currentPlayer == 1 || currentPlayer == 2;
+     * ensures getCurrentPlayer() == currentPlayer;
+     * 
+     * @
+     */
     public Game(int currentPlayer) {
         board = new Board();
         this.currentPlayer = currentPlayer;
@@ -47,10 +54,13 @@ public class Game {
      * Initializes all 16 unique pieces used in the game
      * and stores them as available pieces.
      */
-    /*@
-      ensures allPieces.size() == 16;
-      ensures availablePieces.size() == 16;
-    @*/
+    /*
+     * @
+     * ensures allPieces.size() == 16;
+     * ensures availablePieces.size() == 16;
+     * 
+     * @
+     */
     private void initPieces() {
         int id = 0;
         for (Size size : Size.values()) {
@@ -72,22 +82,31 @@ public class Game {
      *
      * @return the current player (1 or 2)
      */
-    /*@
-      ensures \result == 1 || \result == 2;
-    @*/
+    /*
+     * @
+     * ensures \result == 1 || \result == 2;
+     * 
+     * @
+     */
     public int getCurrentPlayer() {
         return currentPlayer;
     }
 
     /**
      * Returns the winner of the game.
+     * 
      * @return the id of the winning player, or 0 if there is no winner
      */
-    /*@
-      ensures \result == 0 || \result == 1 || \result == 2;
-    @*/
+    /*
+     * @
+     * ensures \result == 0 || \result == 1 || \result == 2;
+     * 
+     * @
+     */
     public int getWinner() {
-        return board.hasWinner() ? currentPlayer : 0;
+        // If there is a winner, it is the player who just moved.
+        // Since doMove switches the player, the winner is the 'other' player.
+        return board.hasWinner() ? (currentPlayer == 1 ? 2 : 1) : 0;
     }
 
     /**
@@ -96,9 +115,12 @@ public class Game {
      * @param m the move to be checked
      * @return true if the move is valid, false otherwise
      */
-    /*@
-      requires m != null;
-    @*/
+    /*
+     * @
+     * requires m != null;
+     * 
+     * @
+     */
     public boolean isValidMove(Move m) {
 
         // first move: only choosing a piece
@@ -108,10 +130,14 @@ public class Game {
         }
 
         // regular move
-        if (currentPieceID == -1) return false;
-        if (!board.isField(m.getLocation())) return false;
-        if (!board.isEmptyField(m.getLocation())) return false;
-        if (!availablePieces.containsKey(m.getNextPiece())) return false;
+        if (currentPieceID == -1)
+            return false;
+        if (!board.isField(m.getLocation()))
+            return false;
+        if (!board.isEmptyField(m.getLocation()))
+            return false;
+        if (!availablePieces.containsKey(m.getNextPiece()))
+            return false;
 
         return true;
     }
@@ -122,11 +148,14 @@ public class Game {
      *
      * @param m the move to execute
      */
-    /*@
-      requires m != null;
-      requires isValidMove(m);
-      ensures getCurrentPlayer() != \old(getCurrentPlayer());
-    @*/
+    /*
+     * @
+     * requires m != null;
+     * requires isValidMove(m);
+     * ensures getCurrentPlayer() != \old(getCurrentPlayer());
+     * 
+     * @
+     */
     public void doMove(Move m) {
 
         // first move: only select a piece
@@ -150,11 +179,15 @@ public class Game {
     /**
      * Checks whether the game is over.
      * The game is over if there is a winner or the board is full.
+     * 
      * @return true if the game is over, false otherwise
      */
-    /*@
-      ensures \result == (getWinner() != 0 || board.isFull());
-    @*/
+    /*
+     * @
+     * ensures \result == (getWinner() != 0 || board.isFull());
+     * 
+     * @
+     */
     public boolean isGameOver() {
         return getWinner() != 0 || board.isFull();
     }
@@ -168,39 +201,49 @@ public class Game {
 
     /**
      * Getter for the current piece id.
+     * 
      * @return the current piece id.
      */
-    /*@
-        @pure
-    */
+    /*
+     * @
+     * 
+     * @pure
+     */
     public int getCurrentPieceID() {
         return currentPieceID;
     }
 
     /**
      * Getter for all available pieces.
+     * 
      * @return the map with id's as a key, and the value as a piece.
      */
-    /*@
-        @pure
-    */
-    public Map<Integer, Piece> getAvailablePieces(){
+    /*
+     * @
+     * 
+     * @pure
+     */
+    public Map<Integer, Piece> getAvailablePieces() {
         return availablePieces;
     }
 
     /**
      * Getter for all pieces.
+     * 
      * @return the map with id's as a key, and the value as a piece.
      */
-    /*@
-        @pure
-    */
-    public Map<Integer, Piece> getAllPieces(){
+    /*
+     * @
+     * 
+     * @pure
+     */
+    public Map<Integer, Piece> getAllPieces() {
         return allPieces;
     }
 
     /**
      * Getter for the board.
+     * 
      * @return the board.
      */
     public Board getBoard() {
@@ -209,6 +252,7 @@ public class Game {
 
     /**
      * Creates a deep copy of this game.
+     * 
      * @return a copy of the game
      */
     public Game deepCopy() {
@@ -222,7 +266,8 @@ public class Game {
     }
 
     /**
-     *Method that checks if the result of the game is draw.
+     * Method that checks if the result of the game is draw.
+     * 
      * @return true if it is draw, false if not.
      */
     public boolean isDraw() {
